@@ -1,0 +1,50 @@
+# Core scientific stack
+networkx>=3.3
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+scipy>=1.13
+
+# HTTP & data fetching
+requests>=2.32
+urllib3>=2.2
+
+# GitHub Archive parsing (compressed JSON)
+ijson>=3.3
+
+# Configuration
+pyyaml>=6.0
+
+# Interactive graph visualization
+pyvis>=0.3.2
+
+# Static plotting
+matplotlib>=3.9
+seaborn>=0.13
+
+# PDF report generation
+reportlab>=4.2
+
+# PowerPoint generation
+python-pptx>=1.0
+
+# Jupyter notebook
+jupyter>=1.1
+notebook>=7.2
+ipykernel>=6.29
+ipywidgets>=8.1
+
+# Progress bars
+tqdm>=4.66
+
+# Utilities
+python-dateutil>=2.9
+pytz>=2024.1
+
+# Optional: faster JSON parsing
+orjson>=3.10
+
+# Testing
+pytest>=8.2
+pytest-cov>=5.0
+
