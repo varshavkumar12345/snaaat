@@ -1,34 +1,19 @@
 """
 src/event_parser.py
 --------------------
-Parse raw GitHub Archive JSON-lines files into structured event records.
+Parse raw GitHub Archive records into verifiable, provenance-tracked direct interactions.
 
-GitHub Archive stores one JSON object per line inside each .json.gz file.
-This module inspects the actual event schema documented at:
-  https://docs.github.com/en/rest/using-the-rest-api/github-event-types
-
-Supported event types that signal developer collaboration:
-
-| Event type          | Collaboration signal                             |
-|---------------------|--------------------------------------------------|
-| PushEvent           | Actor pushed commits to a repo (may list authors)|
-| PullRequestEvent    | Actor opened/merged/closed a PR                  |
-| PullRequestReviewEvent | Actor reviewed someone else's PR              |
-| IssuesEvent         | Actor opened/closed an issue                     |
-| IssueCommentEvent   | Actor commented on an issue                      |
-| ForkEvent           | Actor forked a repo (interest signal)            |
-| WatchEvent          | Actor starred a repo                             |
-| CreateEvent         | Actor created a branch/tag/repo                  |
-| CommitCommentEvent  | Actor commented on a specific commit             |
-
-Usage
-~~~~~
-    from src import load_config
-    from src.event_parser import EventParser
-
-    cfg = load_config()
-    parser = EventParser(cfg)
-    events_df = parser.parse_files(archive_paths)
+Strict Interaction Rules:
+  - Do NOT create edges between every pair who touched the same repo.
+  - Only direct dyadic actions:
+      1. PR Reviews (reviewer -> PR author)
+      2. PR Review Comments (inline code commenter -> PR author)
+      3. Issue Comments (commenter -> issue author)
+      4. PR Merges / Closures (maintainer -> PR author)
+      5. Member Additions (admin -> member)
+      6. Issue/PR Assignment (assigner -> assignee)
+  - Numeric GitHub ID resolution preferred where available.
+  - Complete provenance tracked (source event_id, event_type, repository, timestamp, relationship).
 """
 
 from __future__ import annotations
@@ -37,242 +22,194 @@ import gzip
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-# Event types that encode a collaboration signal
 COLLABORATION_EVENTS = {
-    "PushEvent",
-    "PullRequestEvent",
     "PullRequestReviewEvent",
-    "IssuesEvent",
-    "IssueCommentEvent",
-    "ForkEvent",
-    "WatchEvent",
-    "CreateEvent",
-    "CommitCommentEvent",
     "PullRequestReviewCommentEvent",
+    "IssueCommentEvent",
+    "PullRequestEvent",
+    "IssuesEvent",
     "MemberEvent",
 }
 
 
 class EventParser:
-    """Parse GitHub Archive .json.gz files into a tidy DataFrame of events."""
+    """Parse archive files into direct dyadic developer interactions with full provenance."""
 
     def __init__(self, config: dict) -> None:
         self._config = config
         filtering = config.get("filtering", {})
         self._exclude_bots: bool = filtering.get("exclude_bots", True)
         self._auto_detect_bots: bool = filtering.get("auto_detect_bots", True)
-        self._extra_exclusions: set[str] = set(
-            filtering.get("extra_exclusions", [])
-        )
-
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
+        self._extra_exclusions: Set[str] = set(filtering.get("extra_exclusions", []))
 
     def parse_files(self, paths: List[Path]) -> pd.DataFrame:
-        """Parse a list of archive files and return a consolidated DataFrame.
+        """Parse archive files and return direct dyadic developer interactions."""
+        all_interactions: List[Dict[str, Any]] = []
 
-        Parameters
-        ----------
-        paths:
-            Local paths to ``.json.gz`` archive files.
+        for path in tqdm(paths, desc="Parsing interactions", unit="file"):
+            interactions = self._parse_file(path)
+            all_interactions.extend(interactions)
 
-        Returns
-        -------
-        pd.DataFrame
-            Columns: event_id, event_type, actor, repo_owner, repo_name,
-            repo_full_name, created_at, payload_action, extra_actors.
-        """
-        all_records: List[Dict[str, Any]] = []
-
-        for path in tqdm(paths, desc="Parsing archives", unit="file"):
-            records = self._parse_file(path)
-            all_records.extend(records)
-            logger.debug("  %s → %d events", path.name, len(records))
-
-        if not all_records:
-            logger.warning("No collaboration events found in supplied archives.")
+        if not all_interactions:
+            logger.warning("No qualifying direct interactions found.")
             return pd.DataFrame(
                 columns=[
-                    "event_id", "event_type", "actor", "repo_owner",
-                    "repo_name", "repo_full_name", "created_at",
-                    "payload_action", "extra_actors",
+                    "source_id", "source_login", "target_id", "target_login",
+                    "relationship", "repo", "event_id", "created_at"
                 ]
             )
 
-        df = pd.DataFrame(all_records)
+        df = pd.DataFrame(all_interactions)
         df["created_at"] = pd.to_datetime(df["created_at"], utc=True, errors="coerce")
-        df = df.dropna(subset=["actor", "created_at"])
-        df = df.drop_duplicates(subset=["event_id"])
-
-        logger.info(
-            "Parsed %d collaboration events from %d files  "
-            "(%d unique actors, %d unique repos).",
-            len(df),
-            len(paths),
-            df["actor"].nunique(),
-            df["repo_full_name"].nunique(),
-        )
+        df = df.dropna(subset=["source_login", "target_login"])
+        df = df.drop_duplicates(subset=["source_login", "target_login", "event_id", "relationship"])
         return df
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     def _parse_file(self, path: Path) -> List[Dict[str, Any]]:
-        """Parse a single archive file; return a list of event dicts."""
         records: List[Dict[str, Any]] = []
-
         try:
             with gzip.open(path, "rb") as fh:
-                for raw_line in fh:
-                    if not raw_line.strip():
+                for line in fh:
+                    if not line.strip():
                         continue
                     try:
-                        event = json.loads(raw_line)
-                    except json.JSONDecodeError:
+                        event = json.loads(line)
+                    except Exception:
                         continue
-
-                    record = self._extract_record(event)
-                    if record is not None:
-                        records.append(record)
-
-        except (OSError, gzip.BadGzipFile) as exc:
-            logger.error("Cannot read %s: %s", path, exc)
-
+                    interactions = self.extract_direct_interactions(event)
+                    records.extend(interactions)
+        except Exception as exc:
+            logger.error("Error reading %s: %s", path, exc)
         return records
 
-    def _extract_record(self, event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Extract a normalised record from a raw GitHub Archive event.
+    def extract_direct_interactions(self, event: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract verified dyadic interactions from an event dict."""
+        etype = event.get("type", "")
+        if etype not in COLLABORATION_EVENTS:
+            return []
 
-        Returns
-        -------
-        dict | None
-            A structured record, or None if the event should be skipped.
-        """
-        event_type: str = event.get("type", "")
-        if event_type not in COLLABORATION_EVENTS:
-            return None
+        actor = event.get("actor") or {}
+        actor_login = actor.get("login") if isinstance(actor, dict) else str(actor)
+        actor_id = actor.get("id") if isinstance(actor, dict) else None
 
-        actor: Optional[str] = self._extract_actor_login(event)
-        if actor is None:
-            return None
+        if not actor_login or self.should_exclude(actor_login):
+            return []
 
-        if self._should_exclude(actor):
-            return None
+        repo = (event.get("repo") or {}).get("name", "")
+        event_id = str(event.get("id", ""))
+        created_at = event.get("created_at", "")
+        payload = event.get("payload") or {}
+        if not isinstance(payload, dict):
+            return []
 
-        repo: Dict[str, Any] = event.get("repo", {})
-        repo_full = repo.get("name", "")  # GitHub Archive uses "name" for full_name
-        repo_parts = repo_full.split("/", 1)
-        repo_owner = repo_parts[0] if len(repo_parts) == 2 else ""
-        repo_name = repo_parts[1] if len(repo_parts) == 2 else repo_full
+        results: List[Dict[str, Any]] = []
 
-        payload: Dict[str, Any] = event.get("payload", {})
-        payload_action: str = payload.get("action", "")
+        # 1. PullRequestReviewEvent
+        if etype == "PullRequestReviewEvent":
+            pr = payload.get("pull_request") or {}
+            target = pr.get("user") or {}
+            target_login = target.get("login")
+            target_id = target.get("id")
+            if target_login and target_login != actor_login and not self.should_exclude(target_login):
+                results.append(self._make_rec(actor_id, actor_login, target_id, target_login,
+                                              "pr_review", repo, event_id, created_at))
 
-        # Collect secondary actors mentioned in the payload
-        extra_actors = self._extract_extra_actors(event_type, payload)
-        extra_actors = [a for a in extra_actors if not self._should_exclude(a)]
+        # 2. PullRequestReviewCommentEvent
+        elif etype == "PullRequestReviewCommentEvent":
+            pr = payload.get("pull_request") or {}
+            target = pr.get("user") or {}
+            target_login = target.get("login")
+            target_id = target.get("id")
+            if target_login and target_login != actor_login and not self.should_exclude(target_login):
+                results.append(self._make_rec(actor_id, actor_login, target_id, target_login,
+                                              "pr_review_comment", repo, event_id, created_at))
 
-        return {
-            "event_id": str(event.get("id", "")),
-            "event_type": event_type,
-            "actor": actor,
-            "repo_owner": repo_owner,
-            "repo_name": repo_name,
-            "repo_full_name": repo_full,
-            "created_at": event.get("created_at", ""),
-            "payload_action": payload_action,
-            "extra_actors": extra_actors,
-        }
+        # 3. IssueCommentEvent
+        elif etype == "IssueCommentEvent":
+            issue = payload.get("issue") or {}
+            target = issue.get("user") or {}
+            target_login = target.get("login")
+            target_id = target.get("id")
+            if target_login and target_login != actor_login and not self.should_exclude(target_login):
+                results.append(self._make_rec(actor_id, actor_login, target_id, target_login,
+                                              "issue_comment", repo, event_id, created_at))
+
+        # 4. PullRequestEvent
+        elif etype == "PullRequestEvent":
+            action = payload.get("action", "")
+            pr = payload.get("pull_request") or {}
+            pr_user = pr.get("user") or {}
+            target_login = pr_user.get("login")
+            target_id = pr_user.get("id")
+            merged_by = pr.get("merged_by") or {}
+            merger_login = merged_by.get("login")
+            merger_id = merged_by.get("id")
+
+            if action == "closed" and merger_login and target_login and merger_login != target_login:
+                if not self.should_exclude(merger_login) and not self.should_exclude(target_login):
+                    results.append(self._make_rec(merger_id, merger_login, target_id, target_login,
+                                                  "pr_merge", repo, event_id, created_at))
+
+            for assignee in pr.get("assignees") or []:
+                a_login = assignee.get("login")
+                a_id = assignee.get("id")
+                if a_login and a_login != actor_login and not self.should_exclude(a_login):
+                    results.append(self._make_rec(actor_id, actor_login, a_id, a_login,
+                                                  "pr_assignee", repo, event_id, created_at))
+
+        # 5. MemberEvent
+        elif etype == "MemberEvent":
+            if payload.get("action") == "added":
+                member = payload.get("member") or {}
+                m_login = member.get("login")
+                m_id = member.get("id")
+                if m_login and m_login != actor_login and not self.should_exclude(m_login):
+                    results.append(self._make_rec(actor_id, actor_login, m_id, m_login,
+                                                  "member_added", repo, event_id, created_at))
+
+        # 6. IssuesEvent (Assignee)
+        elif etype == "IssuesEvent":
+            issue = payload.get("issue") or {}
+            for assignee in issue.get("assignees") or []:
+                a_login = assignee.get("login")
+                a_id = assignee.get("id")
+                if a_login and a_login != actor_login and not self.should_exclude(a_login):
+                    results.append(self._make_rec(actor_id, actor_login, a_id, a_login,
+                                                  "issue_assignee", repo, event_id, created_at))
+
+        return results
 
     @staticmethod
-    def _extract_actor_login(event: Dict[str, Any]) -> Optional[str]:
-        """Return the primary actor's login from an event dict."""
-        actor = event.get("actor")
-        if isinstance(actor, dict):
-            return actor.get("login")
-        if isinstance(actor, str):
-            return actor
-        return None
+    def _make_rec(source_id, source_login, target_id, target_login, rel, repo, event_id, created_at):
+        return {
+            "source_id": str(source_id) if source_id else None,
+            "source_login": source_login.lower().strip(),
+            "target_id": str(target_id) if target_id else None,
+            "target_login": target_login.lower().strip(),
+            "relationship": rel,
+            "repo": repo,
+            "event_id": event_id,
+            "created_at": created_at,
+        }
 
-    def _extract_extra_actors(
-        self, event_type: str, payload: Dict[str, Any]
-    ) -> List[str]:
-        """Extract secondary actor logins from the payload.
-
-        These are the other side of a collaboration edge:
-        - For PullRequestEvent: the PR author when reviewed, or assignees.
-        - For IssueCommentEvent: the issue author.
-        - For MemberEvent: the added member.
-        """
-        extras: List[str] = []
-
-        try:
-            if event_type == "PullRequestEvent":
-                pr = payload.get("pull_request", {})
-                if user := pr.get("user", {}).get("login"):
-                    extras.append(user)
-                if merged_by := (pr.get("merged_by") or {}).get("login"):
-                    extras.append(merged_by)
-                for assignee in pr.get("assignees", []):
-                    if login := assignee.get("login"):
-                        extras.append(login)
-
-            elif event_type == "PullRequestReviewEvent":
-                pr = payload.get("pull_request", {})
-                if user := pr.get("user", {}).get("login"):
-                    extras.append(user)
-
-            elif event_type in ("IssuesEvent", "IssueCommentEvent",
-                                 "CommitCommentEvent",
-                                 "PullRequestReviewCommentEvent"):
-                issue = payload.get("issue", {})
-                if user := issue.get("user", {}).get("login"):
-                    extras.append(user)
-
-            elif event_type == "ForkEvent":
-                forkee = payload.get("forkee", {})
-                if owner := forkee.get("owner", {}).get("login"):
-                    extras.append(owner)
-
-            elif event_type == "MemberEvent":
-                if member := payload.get("member", {}).get("login"):
-                    extras.append(member)
-
-        except (AttributeError, TypeError):
-            pass
-
-        # Deduplicate while preserving order
-        seen: set[str] = set()
-        unique: List[str] = []
-        for login in extras:
-            if login and login not in seen:
-                seen.add(login)
-                unique.append(login)
-        return unique
-
-    def _should_exclude(self, login: str) -> bool:
-        """Return True if *login* should be filtered from the graph."""
+    def should_exclude(self, login: str) -> bool:
+        if not login:
+            return True
         if not self._exclude_bots:
             return login in self._extra_exclusions
-
         if login in self._extra_exclusions:
             return True
-
         if self._auto_detect_bots:
             lower = login.lower()
             if lower.endswith("[bot]") or lower.endswith("-bot"):
                 return True
-            if "bot" in lower and ("github" in lower or "actions" in lower):
+            if "bot" in lower and ("github" in lower or "actions" in lower or "renovate" in lower or "dependa" in lower):
                 return True
-
         return False
-

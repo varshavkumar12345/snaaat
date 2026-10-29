@@ -85,11 +85,14 @@ class GitHubClient:
 
         for attempt in range(retries + 1):
             try:
-                response = self._session.get(url, params=params, timeout=30)
+                response = self._session.get(url, params=params, timeout=5)
+            except requests.ConnectionError as exc:
+                logger.debug("Network connection unavailable (%s): %s", type(exc).__name__, exc)
+                return {}
             except requests.RequestException as exc:
                 logger.warning("Request failed (%s): %s", type(exc).__name__, exc)
                 if attempt == retries:
-                    raise
+                    return {}
                 time.sleep(delay)
                 delay *= 2
                 continue
@@ -106,12 +109,23 @@ class GitHubClient:
                     wait = max(int(reset_ts) - int(time.time()) + 1, delay)
                 else:
                     wait = delay
+                
+                # If unauthenticated and wait is large, do not block the program
+                token = self._config.get("github", {}).get("token", "")
+                if wait > 15 and not token:
+                    logger.warning(
+                        "GitHub API rate limit reached (HTTP %s, wait=%ds). "
+                        "To avoid rate limits, set your GitHub token in config.yaml or GITHUB_TOKEN environment variable.",
+                        response.status_code, wait
+                    )
+                    return {}
+
                 logger.warning(
                     "Rate-limited by GitHub (HTTP %s). Waiting %ss …",
                     response.status_code,
-                    wait,
+                    min(wait, 10),
                 )
-                time.sleep(wait)
+                time.sleep(min(wait, 10))
                 delay *= 2
                 continue
 

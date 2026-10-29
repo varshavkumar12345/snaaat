@@ -1,35 +1,15 @@
 """
 src/graph_builder.py
 ---------------------
-Construct a weighted, undirected developer collaboration graph from parsed
-GitHub Archive events, optionally enriched via the GitHub REST API.
-
-Graph semantics
-~~~~~~~~~~~~~~~
-* **Nodes** — GitHub usernames (developers).
-* **Edges** — an edge (u, v) exists when u and v appear in the same event
-  (e.g. actor and PR author, or two contributors to the same repo).
-* **Edge weight** — the number of distinct events in which u and v co-appear.
-
-The graph is built around an *ego network* seeded with the configured
-starting username, then expanded up to ``graph.max_depth`` hops and
-capped at ``graph.max_nodes`` nodes.
-
-Usage
-~~~~~
-    from src import load_config
-    from src.graph_builder import GraphBuilder
-
-    cfg = load_config()
-    builder = GraphBuilder(cfg)
-    G = builder.build(events_df)
+Construct a Developer Collaboration Network centered on a seed user with configurable
+expansion depth (1-hop, 2-hop), deterministic node caps, and rich node/edge attributes.
 """
 
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from collections import defaultdict, deque
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 import pandas as pd
@@ -38,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class GraphBuilder:
-    """Build a NetworkX collaboration graph from a parsed events DataFrame."""
+    """Builds a NetworkX graph centered on a starting developer."""
 
     def __init__(self, config: dict) -> None:
         self._config = config
@@ -46,197 +26,164 @@ class GraphBuilder:
         self._max_nodes: int = graph_cfg.get("max_nodes", 500)
         self._max_depth: int = graph_cfg.get("max_depth", 2)
         self._min_weight: int = graph_cfg.get("min_edge_weight", 1)
-        self._seed_user: str = config.get("github", {}).get("username", "")
+        self._seed_user: str = config.get("github", {}).get("username", "").lower().strip()
 
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
+    def build_network(
+        self,
+        interactions_df: pd.DataFrame,
+        seed_metadata: Optional[Dict[str, Any]] = None,
+        api_collaborators: Optional[List[Dict[str, Any]]] = None,
+    ) -> Tuple[nx.Graph, Dict[str, Any]]:
+        """Construct ego-network with deterministic BFS expansion up to max_depth hops."""
+        G_full = nx.Graph()
+
+        # Step 1: Accumulate interaction provenance into G_full
+        for _, row in interactions_df.iterrows():
+            u = row["source_login"]
+            v = row["target_login"]
+            if not u or not v or u == v:
+                continue
+
+            for user, uid in [(u, row.get("source_id")), (v, row.get("target_id"))]:
+                if user not in G_full:
+                    G_full.add_node(user, github_id=uid or "", username=user,
+                                    account_type="User", qualifying_interactions=0)
+                elif uid and not G_full.nodes[user].get("github_id"):
+                    G_full.nodes[user]["github_id"] = uid
+
+            G_full.nodes[u]["qualifying_interactions"] += 1
+            G_full.nodes[v]["qualifying_interactions"] += 1
+
+            if G_full.has_edge(u, v):
+                G_full[u][v]["weight"] += 1
+                G_full[u][v]["relationships"].add(row["relationship"])
+                G_full[u][v]["repos"].add(row["repo"])
+                G_full[u][v]["event_ids"].append(row["event_id"])
+            else:
+                G_full.add_edge(
+                    u, v,
+                    weight=1,
+                    relationships={row["relationship"]},
+                    repos={row["repo"]},
+                    event_ids=[row["event_id"]],
+                )
+
+        # Step 2: Inject direct collaborators from API if available
+        if api_collaborators:
+            for c in api_collaborators:
+                v = c.get("login", "").lower().strip()
+                if not v or v == self._seed_user:
+                    continue
+                if self._seed_user not in G_full:
+                    G_full.add_node(self._seed_user, github_id="", username=self._seed_user,
+                                    account_type="User", qualifying_interactions=0)
+                if v not in G_full:
+                    G_full.add_node(v, github_id=str(c.get("id", "")), username=v,
+                                    account_type="User", qualifying_interactions=0)
+                
+                rel = c.get("relationship", "api_collaborator")
+                repo = c.get("repo", "api_enrichment")
+                if G_full.has_edge(self._seed_user, v):
+                    G_full[self._seed_user][v]["weight"] += 1
+                    G_full[self._seed_user][v]["relationships"].add(rel)
+                    G_full[self._seed_user][v]["repos"].add(repo)
+                else:
+                    G_full.add_edge(self._seed_user, v, weight=1,
+                                    relationships={rel}, repos={repo}, event_ids=["api_bootstrap"])
+
+        # Filter by min_weight
+        weak_edges = [(u, v) for u, v, d in G_full.edges(data=True) if d["weight"] < self._min_weight]
+        G_full.remove_edges_from(weak_edges)
+
+        status_info = {
+            "seed_user": self._seed_user,
+            "seed_found": self._seed_user in G_full,
+            "max_depth_requested": self._max_depth,
+            "max_nodes_cap": self._max_nodes,
+            "insufficient_data": False,
+            "reason": "",
+        }
+
+        if not self._seed_user:
+            status_info["insufficient_data"] = True
+            status_info["reason"] = "No seed username was configured."
+            return nx.Graph(), status_info
+
+        if self._seed_user not in G_full:
+            status_info["insufficient_data"] = True
+            status_info["reason"] = (
+                f"Starting developer '{self._seed_user}' has 0 qualifying public interactions "
+                f"in the examined dataset. A network cannot be constructed without seed activity."
+            )
+            return nx.Graph(), status_info
+
+        # Step 3: Expand ego network deterministically via BFS
+        selected_nodes: Set[str] = {self._seed_user}
+        current_layer: List[str] = [self._seed_user]
+        
+        for depth in range(1, self._max_depth + 1):
+            next_layer: List[str] = []
+            for node in current_layer:
+                nbrs = sorted(
+                    G_full.neighbors(node),
+                    key=lambda n: (-G_full[node][n]["weight"], n)
+                )
+                for nbr in nbrs:
+                    if nbr not in selected_nodes:
+                        selected_nodes.add(nbr)
+                        next_layer.append(nbr)
+                        if len(selected_nodes) >= self._max_nodes:
+                            break
+                if len(selected_nodes) >= self._max_nodes:
+                    break
+            current_layer = next_layer
+            if len(selected_nodes) >= self._max_nodes or not current_layer:
+                break
+
+        G = G_full.subgraph(selected_nodes).copy()
+
+        # Update node metadata & SNA metrics
+        if seed_metadata and self._seed_user in G:
+            G.nodes[self._seed_user]["github_id"] = str(seed_metadata.get("id", ""))
+            G.nodes[self._seed_user]["account_type"] = seed_metadata.get("type", "User")
+            G.nodes[self._seed_user]["name"] = seed_metadata.get("name", "")
+
+        for n in G.nodes():
+            G.nodes[n]["is_seed"] = (n == self._seed_user)
+            G.nodes[n]["num_collaborators"] = G.degree(n)
+
+        # Convert set attributes to sorted comma-delimited strings for GraphML compatibility
+        for u, v in G.edges():
+            rels = G[u][v].get("relationships", set())
+            repos = G[u][v].get("repos", set())
+            G[u][v]["relationship_types"] = ", ".join(sorted(list(rels)))
+            G[u][v]["shared_repositories"] = ", ".join(sorted(list(repos)))
+
+        status_info["nodes_built"] = G.number_of_nodes()
+        status_info["edges_built"] = G.number_of_edges()
+        return G, status_info
 
     def build(self, events_df: pd.DataFrame) -> nx.Graph:
-        """Build and return a weighted undirected collaboration graph.
-
-        Parameters
-        ----------
-        events_df:
-            DataFrame produced by ``EventParser.parse_files()``.
-
-        Returns
-        -------
-        nx.Graph
-            Nodes carry attribute ``degree_centrality``; edges carry
-            attribute ``weight`` (co-occurrence count).
-        """
-        if events_df.empty:
-            logger.warning("Events DataFrame is empty — returning empty graph.")
-            return nx.Graph()
-
-        # Step 1: accumulate raw edge weights
-        edge_weights: Dict[Tuple[str, str], int] = defaultdict(int)
-        self._accumulate_edges(events_df, edge_weights)
-
-        # Step 2: build initial graph from all edges
-        G_full = nx.Graph()
-        for (u, v), w in edge_weights.items():
-            if w >= self._min_weight:
-                G_full.add_edge(u, v, weight=w)
-
-        logger.info(
-            "Full graph: %d nodes, %d edges (min_weight=%d).",
-            G_full.number_of_nodes(),
-            G_full.number_of_edges(),
-            self._min_weight,
-        )
-
-        # Step 3: ego-network expansion from seed user
-        G = self._expand_ego_network(G_full)
-
-        # Step 4: annotate nodes with basic SNA metrics
-        self._annotate(G)
-
-        logger.info(
-            "Final graph: %d nodes, %d edges.",
-            G.number_of_nodes(),
-            G.number_of_edges(),
-        )
+        """Compatibility wrapper for pipeline integration."""
+        G, _ = self.build_network(events_df)
         return G
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _accumulate_edges(
-        self,
-        events_df: pd.DataFrame,
-        edge_weights: Dict[Tuple[str, str], int],
-    ) -> None:
-        """Populate *edge_weights* from actor ↔ extra_actor pairs."""
-        for _, row in events_df.iterrows():
-            actor: str = row["actor"]
-            extra_actors: List[str] = row.get("extra_actors", [])
-            repo_owner: str = row.get("repo_owner", "")
-
-            # Actor ↔ each extra actor (direct interaction)
-            for other in extra_actors:
-                if other and other != actor:
-                    key = tuple(sorted([actor, other]))
-                    edge_weights[key] += 1  # type: ignore[index]
-
-            # Actor ↔ repo owner (contributed to someone's repo)
-            if repo_owner and repo_owner != actor:
-                key = tuple(sorted([actor, repo_owner]))
-                edge_weights[key] += 1  # type: ignore[index]
-
-    def _expand_ego_network(self, G_full: nx.Graph) -> nx.Graph:
-        """Return a subgraph of *G_full* rooted at the seed user.
-
-        Performs BFS up to ``max_depth`` hops from the seed.  Falls back to
-        the largest connected component if the seed is not in the graph.
-        """
-        seed = self._seed_user
-
-        if seed and seed in G_full:
-            visited: Set[str] = set()
-            frontier = {seed}
-            for depth in range(self._max_depth):
-                next_frontier: Set[str] = set()
-                for node in frontier:
-                    for nbr in G_full.neighbors(node):
-                        if nbr not in visited and nbr not in frontier:
-                            next_frontier.add(nbr)
-                visited |= frontier
-                frontier = next_frontier
-
-                if len(visited) + len(frontier) >= self._max_nodes:
-                    logger.info(
-                        "Node cap (%d) reached at depth %d.",
-                        self._max_nodes,
-                        depth + 1,
-                    )
-                    break
-
-            all_nodes = visited | frontier
-            all_nodes = set(list(all_nodes)[: self._max_nodes])
-            subgraph = G_full.subgraph(all_nodes).copy()
-
-        elif G_full.number_of_nodes() > 0:
-            logger.warning(
-                "Seed user '%s' not found in the graph. "
-                "Using the largest connected component instead.",
-                seed,
-            )
-            largest_cc = max(nx.connected_components(G_full), key=len)
-            nodes = set(list(largest_cc)[: self._max_nodes])
-            subgraph = G_full.subgraph(nodes).copy()
-
-        else:
-            subgraph = nx.Graph()
-
-        return subgraph
-
-    def _annotate(self, G: nx.Graph) -> None:
-        """Annotate nodes with centrality metrics in-place."""
-        if G.number_of_nodes() == 0:
-            return
-
-        degree_cent = nx.degree_centrality(G)
-        nx.set_node_attributes(G, degree_cent, "degree_centrality")
-
-        # Betweenness is expensive; skip for large graphs
-        if G.number_of_nodes() <= 300:
-            betweenness = nx.betweenness_centrality(G, weight="weight")
-            nx.set_node_attributes(G, betweenness, "betweenness_centrality")
-
-        # Clustering coefficient
-        clustering = nx.clustering(G, weight="weight")
-        nx.set_node_attributes(G, clustering, "clustering_coefficient")
-
-        # Mark the seed user
-        if self._seed_user in G:
-            G.nodes[self._seed_user]["is_seed"] = True
 
 
 def compute_network_stats(G: nx.Graph) -> dict:
-    """Compute and return a summary dict of network-level SNA statistics.
-
-    Parameters
-    ----------
-    G:
-        The collaboration graph.
-
-    Returns
-    -------
-    dict
-        Keys: n_nodes, n_edges, density, avg_degree, avg_clustering,
-        n_components, largest_component_size, is_connected,
-        avg_shortest_path (if small enough), diameter (if small enough).
-    """
     if G.number_of_nodes() == 0:
         return {}
-
-    stats: dict = {
+    stats = {
         "n_nodes": G.number_of_nodes(),
         "n_edges": G.number_of_edges(),
         "density": round(nx.density(G), 6),
-        "avg_degree": round(
-            sum(d for _, d in G.degree()) / G.number_of_nodes(), 4
-        ),
-        "avg_clustering": round(nx.average_clustering(G, weight="weight"), 6),
+        "avg_degree": round(sum(d for _, d in G.degree()) / G.number_of_nodes(), 4),
         "n_components": nx.number_connected_components(G),
         "largest_component_size": len(max(nx.connected_components(G), key=len)),
-        "is_connected": nx.is_connected(G),
     }
-
-    # Diameter and average path length only on the LCC and if not too large
-    lcc_nodes = max(nx.connected_components(G), key=len)
-    lcc = G.subgraph(lcc_nodes)
-    if lcc.number_of_nodes() <= 500:
+    if stats["largest_component_size"] > 1:
+        lcc = G.subgraph(max(nx.connected_components(G), key=len))
         try:
-            stats["diameter"] = nx.diameter(lcc)
-            stats["avg_shortest_path"] = round(
-                nx.average_shortest_path_length(lcc), 4
-            )
-        except nx.NetworkXError:
+            stats["avg_clustering"] = round(nx.average_clustering(lcc), 6)
+        except Exception:
             pass
-
     return stats
-
