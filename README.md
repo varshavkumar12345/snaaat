@@ -1,242 +1,143 @@
 # GitHub Developer Collaboration Network & Link Prediction
 
-> **Academic Social Network Analysis project** — constructs a developer
-> collaboration graph from public GitHub activity, applies four link-prediction
-> algorithms, evaluates them, and generates a full set of deliverables
-> (interactive HTML visualisation, GraphML, PDF report, and PowerPoint deck).
-
----
-
-## Table of Contents
-
-1. [Project Overview](#1-project-overview)
-2. [Directory Structure](#2-directory-structure)
-3. [Prerequisites](#3-prerequisites)
-4. [Installation](#4-installation)
-5. [Configuration](#5-configuration)
-6. [Running the Pipeline](#6-running-the-pipeline)
-7. [Running the Notebook](#7-running-the-notebook)
-8. [Running the Tests](#8-running-the-tests)
-9. [Outputs](#9-outputs)
-10. [Pipeline Phases](#10-pipeline-phases)
-11. [Algorithms](#11-algorithms)
-12. [Troubleshooting](#12-troubleshooting)
+> **Academic Social Network Analysis (SNA) Project**  
+> Constructs a verifiable developer collaboration graph from public GitHub Archive activity, performs zero-leakage link prediction, evaluates four classical algorithms, and generates full academic deliverables (ReportLab PDF, PowerPoint slide deck, PyVis interactive network, Cytoscape GraphML, and explainable recommendations).
 
 ---
 
 ## 1. Project Overview
 
-The pipeline:
+This application accepts any GitHub username (configured in `config.yaml` or provided via CLI), queries public GitHub event streams, isolates direct dyadic collaboration actions, and predicts future developer connections.
 
-1. Accepts a **GitHub username** (configured in `config.yaml`).
-2. Downloads hourly **GitHub Archive** `.json.gz` files for the configured date
-   range and extracts collaboration events (PushEvent, PullRequestEvent,
-   IssuesEvent, IssueCommentEvent, ForkEvent, WatchEvent, CreateEvent).
-3. Optionally enriches the network via the **GitHub REST API**.
-4. Constructs a **weighted undirected collaboration graph** (NetworkX).
-5. Computes standard **SNA metrics** (degree, betweenness, clustering, etc.).
-6. Runs **four link-prediction algorithms** and evaluates them with AUC-ROC,
-   Precision, Recall, F1, and Average Precision.
-7. Generates **Top-10 / Top-20 collaboration recommendations**.
-8. Produces: interactive HTML, static PNG plots, Cytoscape GraphML, a PDF
-   report, and a PowerPoint presentation.
+### Key Capabilities
+- **Strict Interaction Provenance:** Rejects naive "same-repo" commits. Edges represent direct code review actions (`PullRequestReviewEvent`, `PullRequestReviewCommentEvent`), issue discussions (`IssueCommentEvent`), PR merges (`PullRequestEvent`), and collaborator additions (`MemberEvent`).
+- **Deterministic Multi-Hop Ego Expansion:** Expands 1-hop and 2-hop networks with deterministic BFS node priority capping.
+- **Zero-Leakage Train/Test Split:** 80% train / 20% test split on positive edges with matching negative non-edges; test edges are strictly purged from the training graph prior to topological feature calculation.
+- **Topological Link Prediction:** Benchmarks **Common Neighbors**, **Jaccard Coefficient**, **Adamic–Adar**, and **Preferential Attachment**.
+- **Structural Explanations:** Explains recommended connections using concrete graph features (e.g. mutual collaborators, degree products).
+- **Academic Deliverables:** Generates actual, verifiable PDF reports, PowerPoint presentations, interactive HTML graphs, and Cytoscape GraphML exports.
 
 ---
 
 ## 2. Directory Structure
 
 ```
-github-collaboration-prediction/
-├── README.md
-├── requirements.txt
-├── config.yaml                  ← All tunable parameters
-├── .gitignore
+snaaat/
+├── config.yaml                         # Configurable hyperparameters & settings
+├── requirements.txt                    # Project dependencies
+├── README.md                           # Documentation & execution guide
 ├── data/
-│   ├── raw/                     ← Downloaded .json.gz archive files
-│   ├── processed/               ← Parsed events as Parquet / CSV
-│   ├── splits/                  ← Train / test edge splits
-│   └── README.md
+│   ├── raw/                            # Cached GitHub Archive dumps (.json.gz)
+│   ├── processed/                      # Node tables, edge tables, full graphml
+│   └── splits/                         # Train/test edge splits & negative samples
+├── docs/
+│   └── viva_questions_and_answers.md   # Viva voce exam Q&A guide
 ├── notebooks/
-│   └── github_link_prediction.ipynb
+│   └── github_link_prediction.ipynb    # Executable step-by-step Jupyter Notebook
+├── outputs/
+│   ├── visualizations/
+│   │   ├── network_overall.png (.svg)  # Full layout visualization
+│   │   ├── network_ego.png (.svg)      # Seed ego-network visualization
+│   │   ├── network_top10_predicted.png # Top-10 predicted edges overlay
+│   │   ├── network_interactive.html    # PyVis interactive 3D/physics viewer
+│   │   └── cytoscape_network.graphml   # Cytoscape-compatible GraphML
+│   ├── recommendations/
+│   │   ├── recommendations_top10.csv   # Top-10 recommendations per algorithm
+│   │   ├── recommendations_top20.csv   # Top-20 recommendations per algorithm
+│   │   ├── recommendations_ensemble.csv# Consensus ranked recommendations
+│   │   └── recommendations_explained.json
+│   ├── reports/
+│   │   ├── collaboration_network_report.pdf # Formatted academic PDF report
+│   │   └── evaluation_results.csv      # Algorithm benchmark comparison table
+│   └── presentation/
+│       └── project_presentation.pptx   # PowerPoint slide deck
+├── scripts/
+│   ├── run_phase2.py                   # Archive inspection & coverage analysis
+│   ├── validate_phase3_4.py            # Ego discovery & 4 validation cases
+│   ├── validate_phase5.py              # Zero-leakage split validation
+│   ├── validate_phase6.py              # Algorithm evaluation validation
+│   └── generate_all_deliverables.py    # Master runner generating all artifacts
 ├── src/
-│   ├── github_client.py         ← GitHub REST API wrapper
-│   ├── archive_collector.py     ← GitHub Archive downloader / cache manager
-│   ├── event_parser.py          ← Raw JSON → structured events
-│   ├── graph_builder.py         ← Events → NetworkX graph
-│   ├── preprocessing.py         ← Filtering, normalisation, train/test split
-│   ├── link_prediction.py       ← Four link-prediction algorithms
-│   ├── evaluation.py            ← Metrics: AUC-ROC, P, R, F1, AP
-│   ├── recommendations.py       ← Top-K recommendation engine
-│   ├── visualization.py         ← Static + interactive + GraphML outputs
-│   └── report_generator.py      ← PDF + PowerPoint generation
-├── tests/
-│   ├── test_event_parser.py
-│   ├── test_graph_builder.py
-│   ├── test_link_prediction.py
-│   └── fixtures/
-└── outputs/
-    ├── visualizations/
-    ├── recommendations/
-    ├── reports/
-    └── presentation/
+│   ├── __init__.py                     # Config loader & logging initialization
+│   ├── github_client.py                # GitHub REST API client with backoff
+│   ├── archive_collector.py            # Hourly archive downloader & cache manager
+│   ├── archive_inspector.py            # Schema inspector & coverage analyzer
+│   ├── event_parser.py                 # Direct interaction parser & provenance
+│   ├── graph_builder.py                # NetworkX builder & BFS ego expansion
+│   ├── collaborator_discovery.py       # Seed discovery engine & edge case handler
+│   ├── preprocessing.py                # Cleaning, 80/20 split & negative sampling
+│   ├── link_prediction.py              # CN, Jaccard, Adamic-Adar, PA & explainer
+│   ├── evaluation.py                   # ROC-AUC, PR-AUC, Prec@K, Recall@K, F1
+│   ├── recommendations.py              # Top-K & ensemble consensus engine
+│   ├── visualization.py                # Static, vector, PyVis & GraphML suite
+│   └── report_generator.py             # ReportLab PDF & python-pptx generator
+└── tests/                              # Automated unit tests (pytest)
 ```
 
 ---
 
-## 3. Prerequisites
+## 3. Quick Start & Execution
 
-| Requirement | Minimum version | Notes |
-|---|---|---|
-| Python | 3.10 | 3.11 / 3.12 also tested |
-| pip | 23+ | `python -m pip install --upgrade pip` |
-| Internet | — | Required for GitHub Archive & API |
-| RAM | 4 GB | 8 GB recommended for larger networks |
-| Disk | 2 GB free | Archive files can be large |
+### Prerequisites
+- Python 3.10+ (tested on Python 3.13)
+- Windows / macOS / Linux
 
----
-
-## 4. Installation
-
+### Installation
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone <repo-url>
-cd github-collaboration-prediction
+cd snaaat
 
-# 2. Create and activate a virtual environment (recommended)
-python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
-
-# 3. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
-
-# 4. (Optional) Verify imports
-python -c "import src.graph_builder; print('All modules importable.')"
 ```
 
-> **GitHub Token (recommended)**
-> Unauthenticated GitHub API calls are limited to 60 requests per hour.
-> Create a **fine-grained Personal Access Token** with *Public Repositories*
-> read access at <https://github.com/settings/tokens> and add it to
-> `config.yaml` → `github.token`.
-
----
-
-## 5. Configuration
-
-Edit **`config.yaml`** before running the pipeline:
-
-```yaml
-github:
-  username: "varshavkumar12345"   # ← change to your seed user
-  token:    ""                    # ← paste your PAT here
-
-collection:
-  start_date: "2024-10-01"
-  end_date:   "2024-10-07"
-  max_archive_files: 24           # keep low on a laptop
-
-graph:
-  max_nodes: 500
-  max_depth: 2
-```
-
-All other parameters (bot exclusion, algorithm list, Top-K values, etc.) are
-documented inline in `config.yaml`.
-
----
-
-## 6. Running the Pipeline
-
+### Running the Complete Pipeline
+To run the entire pipeline and generate all deliverables:
 ```bash
-# Run the full pipeline (all phases)
-python -m src.pipeline
-
-# Override the username at the command line
-python -m src.pipeline --username torvalds
-
-# Override multiple settings
-python -m src.pipeline --username torvalds --config config.yaml
+python scripts/generate_all_deliverables.py
 ```
 
----
-
-## 7. Running the Notebook
-
+### Running the Step-by-Step Validation Scripts
 ```bash
-jupyter notebook notebooks/github_link_prediction.ipynb
+# Phase 2: Inspect archive schemas and generate coverage report
+python scripts/run_phase2.py
+
+# Phase 3 & 4: Validate seed user discovery, 1-hop/2-hop expansion, and edge cases
+python scripts/validate_phase3_4.py
+
+# Phase 5: Validate 80/20 train/test splitting and zero leakage
+python scripts/validate_phase5.py
+
+# Phase 6: Validate link prediction algorithms, metrics, and explanations
+python scripts/validate_phase6.py
 ```
 
-The notebook mirrors the full pipeline and is self-contained. Run all cells
-top-to-bottom. Each phase prints a validation summary before proceeding.
-
----
-
-## 8. Running the Tests
-
+### Running Unit Tests
 ```bash
-# All tests
 pytest tests/ -v
-
-# With coverage report
-pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
 ---
 
-## 9. Outputs
+## 4. Generated Deliverables Summary
 
-| File | Location | Description |
+| Deliverable | Location | Description |
 |---|---|---|
-| `network_interactive.html` | `outputs/visualizations/` | PyVis interactive graph |
-| `network_static.png` | `outputs/visualizations/` | Matplotlib network plot |
-| `degree_distribution.png` | `outputs/visualizations/` | Degree distribution chart |
-| `collaboration_network.graphml` | `outputs/visualizations/` | Cytoscape-ready export |
-| `recommendations_top10.csv` | `outputs/recommendations/` | Top-10 link predictions |
-| `recommendations_top20.csv` | `outputs/recommendations/` | Top-20 link predictions |
-| `evaluation_results.csv` | `outputs/reports/` | Algorithm comparison table |
-| `report.pdf` | `outputs/reports/` | Full academic PDF report |
-| `presentation.pptx` | `outputs/presentation/` | Auto-generated slide deck |
-| `pipeline.log` | `outputs/` | Full execution log |
+| **Academic Evaluation Report** | `outputs/reports/collaboration_network_report.pdf` | Formatted multi-page PDF report with embedded figures, topology metrics, and benchmark tables. |
+| **PowerPoint Presentation** | `outputs/presentation/project_presentation.pptx` | 16:9 widescreen academic slide deck ready for project defense. |
+| **Interactive Network Graph** | `outputs/visualizations/network_interactive.html` | PyVis interactive network visualization with physics and node inspection. |
+| **Cytoscape GraphML** | `outputs/visualizations/cytoscape_network.graphml` | Typed GraphML file ready for import into Cytoscape. |
+| **Predicted Links Overlay** | `outputs/visualizations/network_top10_predicted.png` (`.svg`) | Visualizes observed edges (solid slate) alongside Top-10 predicted edges (dashed red). |
+| **Global & Ego Network Views** | `outputs/visualizations/network_overall.png`, `network_ego.png` | PNG & SVG vector renders of global and ego-level network topologies. |
+| **Algorithm Benchmark Table** | `outputs/reports/evaluation_results.csv` | ROC-AUC, PR-AUC, Precision@10, Recall@10, and F1 across all 4 algorithms. |
+| **Explainable Recommendations** | `outputs/recommendations/recommendations_top10.csv`, `top20.csv`, `ensemble.csv` | Ranked candidate collaborators with structural feature explanations. |
+| **Viva Voce Exam Guide** | `docs/viva_questions_and_answers.md` | Comprehensive Q&A covering methodology, graph theory, and limitations. |
+| **Executable Jupyter Notebook** | `notebooks/github_link_prediction.ipynb` | End-to-end interactive notebook. |
 
 ---
 
-## 10. Pipeline Phases
-
-| Phase | Module(s) | Description |
-|---|---|---|
-| 1 | — | Project setup & architecture (this phase) |
-| 2 | `archive_collector`, `github_client` | Data collection from GitHub Archive & API |
-| 3 | `event_parser`, `preprocessing` | Event parsing & graph preprocessing |
-| 4 | `graph_builder` | Graph construction & SNA metrics |
-| 5 | `link_prediction`, `evaluation` | Link prediction & evaluation |
-| 6 | `recommendations` | Collaboration recommendations |
-| 7 | `visualization` | Interactive & static visualizations |
-| 8 | `report_generator` | PDF report & PowerPoint generation |
-
----
-
-## 11. Algorithms
-
-| Algorithm | Description |
-|---|---|
-| **Common Neighbors** | Counts shared neighbours between two nodes |
-| **Jaccard Coefficient** | Normalises common neighbours by union of neighbours |
-| **Adamic-Adar** | Weights common neighbours by inverse log degree |
-| **Preferential Attachment** | Product of node degrees (rich-get-richer) |
-
----
-
-## 12. Troubleshooting
-
-| Problem | Solution |
-|---|---|
-| `ModuleNotFoundError` | Activate the virtual environment and re-run `pip install -r requirements.txt` |
-| GitHub API 403 / rate limit | Add a PAT to `config.yaml → github.token` |
-| Archive download timeout | Reduce `collection.max_archive_files` or widen the date range |
-| Empty graph | Widen date range, lower `graph.min_edge_weight`, or increase `graph.max_nodes` |
-| Memory error | Reduce `collection.max_archive_files` and `graph.max_nodes` |
-
+## 5. Limitations & Ethical Data Notes
+1. **Temporal Slicing:** GitHub Archive captures hourly slices. An individual student account with no activity in a specific 1-hour window will show zero interactions without historical API enrichment.
+2. **Commit Email Privacy:** `PushEvent` commit authors are excluded from edge creation unless verified through dyadic GitHub platform interactions (PR review, issue comments) to prevent false email attribution.
+3. **Score Interpretation:** Link prediction scores are comparative topological ranking heuristics and should not be interpreted as absolute probabilities of collaboration.

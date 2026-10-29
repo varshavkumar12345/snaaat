@@ -1,19 +1,11 @@
 """
 src/report_generator.py
 ------------------------
-Generate academic deliverables:
-  1. PDF report (ReportLab)
-  2. PowerPoint presentation (python-pptx)
+Phase 7: Academic PDF Report and PowerPoint Presentation Generation.
 
-Usage
-~~~~~
-    from src import load_config
-    from src.report_generator import ReportGenerator
-
-    cfg = load_config()
-    gen = ReportGenerator(cfg)
-    gen.generate_pdf(network_stats, eval_df, rec_dfs, image_paths)
-    gen.generate_pptx(network_stats, eval_df, rec_dfs, image_paths)
+Produces:
+  1. Full academic evaluation report (ReportLab PDF).
+  2. Slide presentation deck (python-pptx).
 """
 
 from __future__ import annotations
@@ -21,7 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -29,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:
-    """Generate PDF report and PowerPoint presentation."""
+    """Generates academic deliverables: PDF report and PowerPoint presentation."""
 
     def __init__(self, config: dict) -> None:
         self._config = config
@@ -38,331 +30,305 @@ class ReportGenerator:
         self._pptx_dir = Path(report_cfg.get("presentation_dir", "outputs/presentation"))
         self._reports_dir.mkdir(parents=True, exist_ok=True)
         self._pptx_dir.mkdir(parents=True, exist_ok=True)
-        self._author: str = report_cfg.get("author", "Student")
-        self._institution: str = report_cfg.get("institution", "University")
-        self._seed_user: str = config.get("github", {}).get("username", "")
+        self._seed_user = config.get("github", {}).get("username", "")
 
-    # ------------------------------------------------------------------
-    # PDF report
-    # ------------------------------------------------------------------
-
-    def generate_pdf(
+    def generate_pdf_report(
         self,
-        network_stats: dict,
+        network_stats: Dict[str, Any],
         eval_df: pd.DataFrame,
-        rec_dfs: Dict[int, pd.DataFrame],
+        recommendations_df: pd.DataFrame,
         image_paths: Optional[List[Path]] = None,
+        filename: str = "collaboration_network_report.pdf",
     ) -> Path:
-        """Generate a PDF report with ReportLab.
+        """Generate comprehensive academic PDF report using ReportLab."""
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (
+            Image,
+            PageBreak,
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
 
-        Parameters
-        ----------
-        network_stats:
-            Dict from ``compute_network_stats()``.
-        eval_df:
-            Algorithm evaluation DataFrame from ``Evaluator.evaluate()``.
-        rec_dfs:
-            Dict of {k: DataFrame} from ``RecommendationEngine.generate()``.
-        image_paths:
-            Optional list of paths to PNG/JPG figures to embed.
-
-        Returns
-        -------
-        Path
-            Path to the generated PDF.
-        """
-        try:
-            from reportlab.lib import colors
-            from reportlab.lib.pagesizes import A4
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib.units import cm
-            from reportlab.platypus import (
-                Image,
-                PageBreak,
-                Paragraph,
-                SimpleDocTemplate,
-                Spacer,
-                Table,
-                TableStyle,
-            )
-        except ImportError:
-            logger.error("reportlab is not installed. Run: pip install reportlab")
-            return self._reports_dir / "report.pdf"
-
-        out = self._reports_dir / "report.pdf"
-        doc = SimpleDocTemplate(str(out), pagesize=A4,
-                                leftMargin=2*cm, rightMargin=2*cm,
-                                topMargin=2*cm, bottomMargin=2*cm)
+        out_pdf = self._reports_dir / filename
+        doc = SimpleDocTemplate(
+            str(out_pdf), pagesize=A4,
+            leftMargin=2 * cm, rightMargin=2 * cm,
+            topMargin=2 * cm, bottomMargin=2 * cm,
+        )
 
         styles = getSampleStyleSheet()
-        h1 = styles["Heading1"]
+        title_style = ParagraphStyle(
+            "DocTitle", parent=styles["Heading1"],
+            fontSize=22, leading=26, textColor=colors.HexColor("#2c3e50"),
+            spaceAfter=15,
+        )
         h2 = styles["Heading2"]
+        h3 = styles["Heading3"]
         body = styles["BodyText"]
         body.leading = 14
 
         story = []
 
-        # ── Title page ────────────────────────────────────────────────
-        story.append(Spacer(1, 3*cm))
-        story.append(Paragraph("GitHub Developer Collaboration Network", h1))
-        story.append(Paragraph("& Link Prediction", h1))
-        story.append(Spacer(1, 1*cm))
-        story.append(Paragraph(f"Seed Username: <b>{self._seed_user}</b>", body))
-        story.append(Paragraph(f"Author: {self._author}", body))
-        story.append(Paragraph(f"Institution: {self._institution}", body))
-        story.append(Paragraph(
-            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", body
-        ))
-        story.append(PageBreak())
+        # ── Title Block ──────────────────────────────────────────────
+        story.append(Spacer(1, 1 * cm))
+        story.append(Paragraph("GitHub Developer Collaboration Network & Link Prediction", title_style))
+        story.append(Paragraph("<i>Academic Project Technical Evaluation Report</i>", h3))
+        story.append(Spacer(1, 0.5 * cm))
+        story.append(Paragraph(f"<b>Starting Seed Developer:</b> {self._seed_user}", body))
+        story.append(Paragraph(f"<b>Generated:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", body))
+        story.append(Spacer(1, 0.8 * cm))
 
-        # ── Section 1: Network Statistics ─────────────────────────────
-        story.append(Paragraph("1. Network Statistics", h2))
-        story.append(Spacer(1, 0.3*cm))
-        if network_stats:
-            stat_data = [["Metric", "Value"]] + [
-                [k.replace("_", " ").title(), str(v)]
-                for k, v in network_stats.items()
-            ]
-            t = Table(stat_data, colWidths=[9*cm, 7*cm])
-            t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-                 [colors.HexColor("#f0f3f4"), colors.white]),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]))
-            story.append(t)
-        else:
-            story.append(Paragraph("Network statistics not available.", body))
-        story.append(Spacer(1, 0.5*cm))
+        # ── Section 1: Methodology & Problem Statement ────────────────
+        story.append(Paragraph("1. Research Objective & Methodology", h2))
+        methodology_text = (
+            "This project analyzes social network structures in public GitHub activity. "
+            "Given a starting developer, the application constructs an ego-centered developer "
+            "collaboration network based exclusively on verifiable, dyadic peer interactions: "
+            "Pull Request reviews, inline review comments, issue discussion threads, PR mergers, "
+            "and collaborator additions. Edges are weighted by interaction frequency and tracked with "
+            "complete provenance (event ID, timestamp, and repository)."
+        )
+        story.append(Paragraph(methodology_text, body))
+        story.append(Spacer(1, 0.4 * cm))
 
-        # ── Section 2: Algorithm Evaluation ───────────────────────────
-        story.append(Paragraph("2. Link Prediction — Algorithm Evaluation", h2))
-        story.append(Spacer(1, 0.3*cm))
+        # ── Section 2: Graph Statistics Table ─────────────────────────
+        story.append(Paragraph("2. Collaboration Network Topology", h2))
+        stat_rows = [["Network Metric", "Value"]]
+        for k, v in network_stats.items():
+            stat_rows.append([k.replace("_", " ").title(), str(v)])
+
+        t_stats = Table(stat_rows, colWidths=[9 * cm, 7 * cm])
+        t_stats.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#f8f9fa"), colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#bdc3c7")),
+            ("PADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(t_stats)
+        story.append(Spacer(1, 0.6 * cm))
+
+        # ── Section 3: Link Prediction Benchmark ──────────────────────
+        story.append(Paragraph("3. Link Prediction Algorithm Benchmark", h2))
+        eval_intro = (
+            "Four classical topological link prediction heuristics were evaluated on consistent "
+            "leak-free test candidates (80% training / 20% testing split with balanced negative sampling): "
+            "Common Neighbors (CN), Jaccard Coefficient (JC), Adamic-Adar (AA), and Preferential Attachment (PA)."
+        )
+        story.append(Paragraph(eval_intro, body))
+        story.append(Spacer(1, 0.3 * cm))
+
         if not eval_df.empty:
-            cols = ["auc_roc", "avg_precision", "precision", "recall", "f1"]
-            headers = ["Algorithm", "AUC-ROC", "Avg Prec", "Precision",
-                       "Recall", "F1"]
-            eval_data = [headers]
+            headers = ["Algorithm", "ROC-AUC", "PR-AUC", "Prec@10", "Rec@10", "F1"]
+            eval_rows = [headers]
             for algo, row in eval_df.iterrows():
-                eval_data.append(
-                    [algo] + [f"{row.get(c, 'N/A'):.4f}"
-                               if isinstance(row.get(c), float) else "N/A"
-                               for c in cols]
-                )
-            t2 = Table(eval_data, colWidths=[5*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2*cm, 2*cm])
-            t2.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1a5276")),
+                eval_rows.append([
+                    str(algo).replace("_", " ").title(),
+                    f"{row.get('roc_auc', 0.0):.4f}",
+                    f"{row.get('pr_auc', 0.0):.4f}",
+                    f"{row.get('precision@10', 0.0):.2f}",
+                    f"{row.get('recall@10', 0.0):.4f}",
+                    f"{row.get('f1_score', 0.0):.4f}",
+                ])
+
+            t_eval = Table(eval_rows, colWidths=[4.5 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm])
+            t_eval.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#16a085")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-                 [colors.HexColor("#eaf4fb"), colors.white]),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
                 ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#e8f8f5"), colors.white]),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#bdc3c7")),
+                ("PADDING", (0, 0), (-1, -1), 5),
             ]))
-            story.append(t2)
-        story.append(Spacer(1, 0.5*cm))
+            story.append(t_eval)
 
-        # ── Section 3: Recommendations ────────────────────────────────
-        story.append(Paragraph("3. Top-K Collaboration Recommendations", h2))
-        for k, rec_df in rec_dfs.items():
-            story.append(Paragraph(f"Top-{k} Recommendations", styles["Heading3"]))
-            story.append(Spacer(1, 0.2*cm))
-            if not rec_df.empty:
-                # Show top 10 rows per algorithm
-                sub = rec_df[rec_df["rank"] <= min(k, 10)]
-                rec_data = [["Rank", "Algorithm", "Candidate", "Score"]]
-                for _, row in sub.iterrows():
-                    rec_data.append([
-                        str(row["rank"]), row["algorithm"],
-                        row["candidate"], f"{row['score']:.6f}",
-                    ])
-                t3 = Table(rec_data, colWidths=[2*cm, 5*cm, 6*cm, 3.5*cm])
-                t3.setStyle(TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#117a65")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-                     [colors.HexColor("#eafaf1"), colors.white]),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                    ("TOPPADDING", (0, 0), (-1, -1), 3),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                ]))
-                story.append(t3)
-            story.append(Spacer(1, 0.4*cm))
+        story.append(Spacer(1, 0.6 * cm))
 
-        # ── Section 4: Figures ────────────────────────────────────────
+        # ── Section 4: Top Recommendations & Explanations ─────────────
+        story.append(Paragraph("4. Recommended Collaborators & Structural Rationale", h2))
+        rec_intro = (
+            "Recommendations exclude existing neighbors, self-loops, and automated bots. "
+            "Scores represent topological proximity heuristics rather than guaranteed collaboration probabilities."
+        )
+        story.append(Paragraph(rec_intro, body))
+        story.append(Spacer(1, 0.3 * cm))
+
+        if not recommendations_df.empty:
+            rec_headers = ["Rank", "Candidate", "Agreed Algos", "Structural Explanation"]
+            rec_rows = [rec_headers]
+            for _, r in recommendations_df.head(10).iterrows():
+                rec_rows.append([
+                    str(r.get("consensus_rank", "")),
+                    str(r.get("candidate", "")),
+                    str(r.get("algorithms_supporting", "")),
+                    str(r.get("summary_rationale", ""))[:65] + "...",
+                ])
+
+            t_recs = Table(rec_rows, colWidths=[1.5 * cm, 3.5 * cm, 2.5 * cm, 9.5 * cm])
+            t_recs.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2980b9")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#ebf5fb"), colors.white]),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#bdc3c7")),
+                ("PADDING", (0, 0), (-1, -1), 4),
+            ]))
+            story.append(t_recs)
+
+        story.append(Spacer(1, 0.6 * cm))
+
+        # ── Section 5: Limitations ────────────────────────────────────
+        story.append(Paragraph("5. Limitations & Threats to Validity", h2))
+        limitations = (
+            "1. <b>Temporal Truncation:</b> Hourly archives capture only real-time public actions; "
+            "historical connections formed outside the collection window are missing without API backfills.<br/>"
+            "2. <b>Sparsity:</b> New or quiet developers with few public interactions yield small ego graphs, "
+            "which causes metrics like Average Clustering to reflect single triangles.<br/>"
+            "3. <b>Unresolved Commit Logins:</b> Git commits contain local author emails rather than GitHub logins; "
+            "only direct platform interactions were parsed to prevent false attribution."
+        )
+        story.append(Paragraph(limitations, body))
+
+        # ── Section 6: Embedded Figures ───────────────────────────────
         if image_paths:
             story.append(PageBreak())
-            story.append(Paragraph("4. Figures", h2))
-            for img_path in image_paths:
-                img_path = Path(img_path)
-                if img_path.exists():
-                    story.append(Spacer(1, 0.3*cm))
-                    story.append(Paragraph(img_path.stem.replace("_", " ").title(),
-                                           styles["Heading3"]))
-                    story.append(
-                        Image(str(img_path), width=15*cm, height=10*cm,
-                              kind="proportional")
-                    )
+            story.append(Paragraph("6. Network Visualizations", h2))
+            for img in image_paths:
+                p = Path(img)
+                if p.exists() and p.suffix.lower() == ".png":
+                    story.append(Spacer(1, 0.3 * cm))
+                    story.append(Paragraph(p.stem.replace("_", " ").title(), h3))
+                    story.append(Image(str(p), width=16 * cm, height=11 * cm, kind="proportional"))
 
         doc.build(story)
-        logger.info("PDF report saved: %s", out)
-        return out
+        logger.info("PDF Report generated successfully at: %s", out_pdf)
+        return out_pdf
 
-    # ------------------------------------------------------------------
-    # PowerPoint presentation
-    # ------------------------------------------------------------------
-
-    def generate_pptx(
+    def generate_presentation(
         self,
-        network_stats: dict,
+        network_stats: Dict[str, Any],
         eval_df: pd.DataFrame,
-        rec_dfs: Dict[int, pd.DataFrame],
+        recommendations_df: pd.DataFrame,
         image_paths: Optional[List[Path]] = None,
+        filename: str = "project_presentation.pptx",
     ) -> Path:
-        """Generate a PowerPoint presentation with python-pptx.
-
-        Parameters
-        ----------
-        network_stats:
-            Dict from ``compute_network_stats()``.
-        eval_df:
-            Algorithm evaluation DataFrame.
-        rec_dfs:
-            Recommendation DataFrames keyed by k.
-        image_paths:
-            List of figure paths to embed as slides.
-
-        Returns
-        -------
-        Path
-            Path to the saved .pptx file.
-        """
-        try:
-            from pptx import Presentation
-            from pptx.dml.color import RGBColor
-            from pptx.util import Cm, Pt
-            from pptx.enum.text import PP_ALIGN
-        except ImportError:
-            logger.error("python-pptx is not installed. Run: pip install python-pptx")
-            return self._pptx_dir / "presentation.pptx"
+        """Generate academic slide deck using python-pptx."""
+        from pptx import Presentation
+        from pptx.dml.color import RGBColor
+        from pptx.enum.text import PP_ALIGN
+        from pptx.util import Cm, Pt
 
         prs = Presentation()
-        prs.slide_width = Cm(33.87)   # widescreen 16:9
+        prs.slide_width = Cm(33.87)   # 16:9 widescreen
         prs.slide_height = Cm(19.05)
-
         blank_layout = prs.slide_layouts[6]
-        title_layout = prs.slide_layouts[0]
 
-        # ── Helper utilities ──────────────────────────────────────────
-        def add_text_box(slide, text, left, top, width, height,
-                         font_size=18, bold=False,
-                         colour=RGBColor(0x2c, 0x3e, 0x50)):
-            txb = slide.shapes.add_textbox(Cm(left), Cm(top), Cm(width), Cm(height))
-            tf = txb.text_frame
-            tf.word_wrap = True
+        def add_header(slide, title_text):
+            tb = slide.shapes.add_textbox(Cm(1.5), Cm(0.8), Cm(30), Cm(1.5))
+            tf = tb.text_frame
             p = tf.paragraphs[0]
-            run = p.add_run()
-            run.text = text
-            run.font.size = Pt(font_size)
-            run.font.bold = bold
-            run.font.color.rgb = colour
+            p.text = title_text
+            p.font.size = Pt(24)
+            p.font.bold = True
+            p.font.color.rgb = RGBColor(0x2C, 0x3E, 0x50)
 
-        def bg_fill(slide, hex_col: str):
-            from pptx.util import Pt
-            fill = slide.background.fill
-            fill.solid()
-            fill.fore_color.rgb = RGBColor.from_string(hex_col)
+        # Slide 1: Title
+        s1 = prs.slides.add_slide(blank_layout)
+        tb1 = s1.shapes.add_textbox(Cm(2), Cm(5), Cm(29), Cm(7))
+        tf1 = tb1.text_frame
+        p1 = tf1.paragraphs[0]
+        p1.text = "GitHub Developer Collaboration Network & Link Prediction"
+        p1.font.size = Pt(28)
+        p1.font.bold = True
+        p1.font.color.rgb = RGBColor(0x2C, 0x3E, 0x50)
 
-        # ── Slide 1: Title ────────────────────────────────────────────
-        slide = prs.slides.add_slide(title_layout)
-        bg_fill(slide, "2C3E50")
-        slide.shapes.title.text = "GitHub Developer Collaboration Network"
-        slide.shapes.title.text_frame.paragraphs[0].runs[0].font.color.rgb = (
-            RGBColor(0xFF, 0xFF, 0xFF)
-        )
-        if len(slide.placeholders) > 1:
-            sub = slide.placeholders[1]
-            sub.text = (
-                f"Link Prediction & Social Network Analysis\n"
-                f"Seed: {self._seed_user}  |  {self._author}  |  "
-                f"{datetime.now().strftime('%Y-%m-%d')}"
-            )
+        p1_sub = tf1.add_paragraph()
+        p1_sub.text = f"Social Network Analysis (SNA) Academic Project | Seed User: {self._seed_user}"
+        p1_sub.font.size = Pt(18)
+        p1_sub.font.color.rgb = RGBColor(0x16, 0xA0, 0x85)
 
-        # ── Slide 2: Network Statistics ───────────────────────────────
-        slide2 = prs.slides.add_slide(blank_layout)
-        bg_fill(slide2, "FDFEFE")
-        add_text_box(slide2, "Network Statistics", 1, 0.5, 30, 1.5,
-                     font_size=24, bold=True)
-        if network_stats:
-            lines = [f"• {k.replace('_',' ').title()}: {v}"
-                     for k, v in network_stats.items()]
-            add_text_box(slide2, "\n".join(lines), 1, 2, 30, 15, font_size=14)
+        # Slide 2: Problem & Methodology
+        s2 = prs.slides.add_slide(blank_layout)
+        add_header(s2, "Problem Statement & Interaction Provenance")
+        tb2 = s2.shapes.add_textbox(Cm(2), Cm(2.8), Cm(29), Cm(14))
+        tf2 = tb2.text_frame
+        bullets = [
+            "• Objective: Predict plausible future developer collaborations centered on a starting user.",
+            "• Ground Truth Source: Public GitHub Archive (hourly compressed JSON-lines dumps).",
+            "• Strict Edge Definition: Rejects arbitrary 'same-repo' commits. Focuses on dyadic actions:",
+            "    - PR Reviews & Review Comments (code review interactions)",
+            "    - Issue Discussion comments & assignments",
+            "    - Pull request merges by repository maintainers",
+            "• Provenance Tracking: Every edge retains source event ID, repository, timestamp, and relation.",
+        ]
+        for b in bullets:
+            p = tf2.add_paragraph()
+            p.text = b
+            p.font.size = Pt(16)
+            p.space_after = Pt(10)
 
-        # ── Slide 3: Algorithm Evaluation ─────────────────────────────
-        slide3 = prs.slides.add_slide(blank_layout)
-        bg_fill(slide3, "FDFEFE")
-        add_text_box(slide3, "Algorithm Evaluation Results", 1, 0.5, 30, 1.5,
-                     font_size=24, bold=True)
+        # Slide 3: Algorithms & Evaluation
+        s3 = prs.slides.add_slide(blank_layout)
+        add_header(s3, "Link Prediction Benchmark & Metrics")
+        tb3 = s3.shapes.add_textbox(Cm(2), Cm(2.8), Cm(29), Cm(14))
+        tf3 = tb3.text_frame
+        p = tf3.add_paragraph()
+        p.text = "Evaluated on leak-free 80/20 train-test splits with balanced negative non-edge samples:"
+        p.font.size = Pt(16)
+        p.space_after = Pt(12)
+
         if not eval_df.empty:
-            lines = []
-            for algo, row in eval_df.iterrows():
-                lines.append(
-                    f"• {algo}: AUC-ROC={row.get('auc_roc','N/A'):.4f}  "
-                    f"F1={row.get('f1','N/A'):.4f}  "
-                    f"AP={row.get('avg_precision','N/A'):.4f}"
+            for algo, r in eval_df.iterrows():
+                p_algo = tf3.add_paragraph()
+                p_algo.text = (
+                    f"• {str(algo).replace('_',' ').title()}: "
+                    f"ROC-AUC = {r.get('roc_auc',0.0):.4f} | "
+                    f"PR-AUC = {r.get('pr_auc',0.0):.4f} | "
+                    f"Prec@10 = {r.get('precision@10',0.0):.2f} | "
+                    f"F1 = {r.get('f1_score',0.0):.4f}"
                 )
-            add_text_box(slide3, "\n".join(lines), 1, 2, 31, 15, font_size=14)
+                p_algo.font.size = Pt(15)
+                p_algo.space_after = Pt(8)
 
-        # ── Slide 4: Top-10 Recommendations ───────────────────────────
-        for k, rec_df in rec_dfs.items():
-            slide_r = prs.slides.add_slide(blank_layout)
-            bg_fill(slide_r, "FDFEFE")
-            add_text_box(slide_r, f"Top-{k} Collaboration Recommendations",
-                         1, 0.5, 31, 1.5, font_size=22, bold=True)
-            if not rec_df.empty:
-                sub = rec_df[rec_df["rank"] <= 5]
-                lines = [
-                    f"  #{int(r['rank'])} [{r['algorithm']}]  "
-                    f"→ {r['candidate']}  (score: {r['score']:.4f})"
-                    for _, r in sub.iterrows()
-                ]
-                add_text_box(slide_r, "\n".join(lines), 1, 2.5, 31, 14,
-                             font_size=14)
+        # Slide 4: Recommendations
+        s4 = prs.slides.add_slide(blank_layout)
+        add_header(s4, "Top-5 Collaboration Recommendations")
+        tb4 = s4.shapes.add_textbox(Cm(2), Cm(2.8), Cm(29), Cm(14))
+        tf4 = tb4.text_frame
+        if not recommendations_df.empty:
+            for _, r in recommendations_df.head(5).iterrows():
+                p_r = tf4.add_paragraph()
+                p_r.text = (
+                    f"#{r.get('consensus_rank')} Candidate: {r.get('candidate')} "
+                    f"({r.get('algorithms_supporting')} algorithms agreeing)\n"
+                    f"   Rationale: {r.get('summary_rationale')}"
+                )
+                p_r.font.size = Pt(14)
+                p_r.space_after = Pt(12)
 
-        # ── Slides for figures ────────────────────────────────────────
+        # Slide 5: Visualizations
         if image_paths:
-            for img_path in image_paths:
-                img_path = Path(img_path)
-                if img_path.exists():
-                    slide_f = prs.slides.add_slide(blank_layout)
-                    bg_fill(slide_f, "FDFEFE")
-                    add_text_box(slide_f,
-                                 img_path.stem.replace("_", " ").title(),
-                                 1, 0.3, 31, 1.2, font_size=20, bold=True)
+            for img in image_paths:
+                p = Path(img)
+                if p.exists() and p.suffix.lower() == ".png":
+                    s_img = prs.slides.add_slide(blank_layout)
+                    add_header(s_img, p.stem.replace("_", " ").title())
                     try:
-                        slide_f.shapes.add_picture(
-                            str(img_path), Cm(1), Cm(1.8), Cm(31), Cm(16)
-                        )
+                        s_img.shapes.add_picture(str(p), Cm(2), Cm(2.5), Cm(29), Cm(15))
                     except Exception as exc:
-                        logger.warning("Could not embed image %s: %s", img_path, exc)
+                        logger.warning("Could not add slide picture %s: %s", p, exc)
 
-        out = self._pptx_dir / "presentation.pptx"
-        prs.save(str(out))
-        logger.info("PowerPoint saved: %s", out)
-        return out
-
+        out_pptx = self._pptx_dir / filename
+        prs.save(str(out_pptx))
+        logger.info("PowerPoint deck generated at: %s", out_pptx)
+        return out_pptx
