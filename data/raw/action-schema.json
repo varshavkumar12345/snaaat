@@ -1,0 +1,516 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GitHub Actions Schema",
+  "description": "Validation schema for GitHub actions",
+  "version": "1.0.0",
+  "last_updated": "2024-11-29",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "$ref": "#/$defs/Actor"
+    },
+    "repository": {
+      "$ref": "#/$defs/Repository"
+    },
+    "details": {
+      "$ref": "#/$defs/ActionDetails"
+    }
+  },
+  "required": [
+    "event_id",
+    "date",
+    "actor",
+    "repository",
+    "action",
+    "details"
+  ],
+  "$defs": {
+    "Actor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "login": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "login"
+      ]
+    },
+    "Repository": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "organisation": {
+          "type": "string"
+        },
+        "organisation_id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "organisation",
+        "organisation_id"
+      ]
+    },
+    "PullRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "author": {
+          "$ref": "#/$defs/Actor"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Label"
+          }
+        },
+        "created_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "closed_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "merged_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "merged": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "number",
+        "title",
+        "state",
+        "author",
+        "labels",
+        "created_date"
+      ]
+    },
+    "Review": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "submitted_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Issue": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed"
+          ]
+        },
+        "author": {
+          "$ref": "#/$defs/Actor"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Label"
+          }
+        },
+        "created_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "closed_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "number",
+        "title",
+        "state",
+        "author",
+        "labels",
+        "created_date"
+      ]
+    },
+    "Label": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the label"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The description of the label"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "Comment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "parent_comment_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "ActionDetails": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PushDetails"
+        },
+        {
+          "$ref": "#/$defs/BranchDetails"
+        },
+        {
+          "$ref": "#/$defs/TagDetails"
+        },
+        {
+          "$ref": "#/$defs/IssueDetails"
+        },
+        {
+          "$ref": "#/$defs/PullRequestDetails"
+        },
+        {
+          "$ref": "#/$defs/ReviewDetails"
+        },
+        {
+          "$ref": "#/$defs/ForkDetails"
+        },
+        {
+          "$ref": "#/$defs/ReleaseDetails"
+        },
+        {
+          "$ref": "#/$defs/WikiDetails"
+        },
+        {
+          "$ref": "#/$defs/EmptyDetails"
+        }
+      ]
+    },
+    "PushDetails": {
+      "type": "object",
+      "properties": {
+        "push": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "ref": {
+              "type": "string",
+              "pattern": "^refs/heads/.*"
+            },
+            "commits": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "ref",
+            "commits"
+          ]
+        }
+      },
+      "required": [
+        "push"
+      ]
+    },
+    "BranchDetails": {
+      "type": "object",
+      "properties": {
+        "branch": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "branch"
+      ]
+    },
+    "TagDetails": {
+      "type": "object",
+      "properties": {
+        "tag_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tag_name"
+      ]
+    },
+    "IssueDetails": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "$ref": "#/$defs/Issue"
+        },
+        "comment": {
+          "$ref": "#/$defs/Comment"
+        }
+      },
+      "required": [
+        "issue"
+      ]
+    },
+    "PullRequestDetails": {
+      "type": "object",
+      "properties": {
+        "pull_request": {
+          "$ref": "#/$defs/PullRequest"
+        },
+        "comment": {
+          "$ref": "#/$defs/Comment"
+        }
+      },
+      "required": [
+        "pull_request"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewDetails": {
+      "type": "object",
+      "properties": {
+        "pull_request": {
+          "$ref": "#/$defs/PullRequest"
+        },
+        "review": {
+          "$ref": "#/$defs/Review"
+        },
+        "comment": {
+          "$ref": "#/$defs/Comment"
+        }
+      },
+      "required": [
+        "pull_request",
+        "review"
+      ]
+    },
+    "ForkDetails": {
+      "type": "object",
+      "properties": {
+        "fork": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "main_branch": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "main_branch"
+          ]
+        }
+      },
+      "required": [
+        "fork"
+      ]
+    },
+    "ReleaseDetails": {
+      "type": "object",
+      "properties": {
+        "release": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "author": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "login": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "login"
+              ]
+            },
+            "draft": {
+              "type": "boolean"
+            },
+            "prerelease": {
+              "type": "boolean"
+            },
+            "created_date": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "tag",
+            "author",
+            "created_date",
+            "draft",
+            "prerelease"
+          ]
+        }
+      },
+      "required": [
+        "release"
+      ]
+    },
+    "WikiDetails": {
+      "type": "object",
+      "properties": {
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "commit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "action",
+              "commit"
+            ]
+          }
+        }
+      },
+      "required": [
+        "pages"
+      ]
+    },
+    "EmptyDetails": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  }
+}
