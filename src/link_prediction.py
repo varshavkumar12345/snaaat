@@ -184,12 +184,11 @@ class LinkPredictor:
 
         |N(u) ∩ N(v)| / |N(u) ∪ N(v)|
         """
-        scores: ScoreMap = {}
-        # Use NetworkX built-in for correctness
-        nx_scores = dict(nx.jaccard_coefficient(G, candidates))
-        for pair, score in nx_scores.items():
-            scores[pair] = score
-        # Fill any missing pairs
+        valid_candidates = [(u, v) for u, v in candidates if u in G and v in G]
+        scores: ScoreMap = {
+            (u, v): float(p)
+            for u, v, p in nx.jaccard_coefficient(G, valid_candidates)
+        }
         for pair in candidates:
             if pair not in scores:
                 scores[pair] = 0.0
@@ -201,10 +200,11 @@ class LinkPredictor:
 
         Σ_{w ∈ N(u)∩N(v)} 1 / log(|N(w)|)
         """
-        scores: ScoreMap = {}
-        nx_scores = dict(nx.adamic_adar_index(G, candidates))
-        for pair, score in nx_scores.items():
-            scores[pair] = score
+        valid_candidates = [(u, v) for u, v in candidates if u in G and v in G]
+        scores: ScoreMap = {
+            (u, v): float(p)
+            for u, v, p in nx.adamic_adar_index(G, valid_candidates)
+        }
         for pair in candidates:
             if pair not in scores:
                 scores[pair] = 0.0
@@ -215,10 +215,11 @@ class LinkPredictor:
         G: nx.Graph, candidates: List[Edge]
     ) -> ScoreMap:
         """Preferential attachment score: |N(u)| × |N(v)|."""
-        scores: ScoreMap = {}
-        nx_scores = dict(nx.preferential_attachment(G, candidates))
-        for pair, score in nx_scores.items():
-            scores[pair] = float(score)
+        valid_candidates = [(u, v) for u, v in candidates if u in G and v in G]
+        scores: ScoreMap = {
+            (u, v): float(p)
+            for u, v, p in nx.preferential_attachment(G, valid_candidates)
+        }
         for pair in candidates:
             if pair not in scores:
                 scores[pair] = 0.0
