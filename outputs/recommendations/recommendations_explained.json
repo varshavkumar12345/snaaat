@@ -1,0 +1,650 @@
+{
+  "common_neighbors": [
+    {
+      "rank": 1,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_37",
+      "score": 4.0,
+      "explanation": "Shares 4 mutual collaborator(s) (developer_11, developer_14, developer_53...)."
+    },
+    {
+      "rank": 2,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_9",
+      "score": 3.0,
+      "explanation": "Shares 3 mutual collaborator(s) (developer_11, developer_14, developer_8)."
+    },
+    {
+      "rank": 3,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_18",
+      "score": 3.0,
+      "explanation": "Shares 3 mutual collaborator(s) (developer_32, developer_53, developer_8)."
+    },
+    {
+      "rank": 4,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_36",
+      "score": 3.0,
+      "explanation": "Shares 3 mutual collaborator(s) (developer_32, developer_1, developer_53)."
+    },
+    {
+      "rank": 5,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_43",
+      "score": 3.0,
+      "explanation": "Shares 3 mutual collaborator(s) (developer_1, developer_53, developer_31)."
+    },
+    {
+      "rank": 6,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_55",
+      "score": 3.0,
+      "explanation": "Shares 3 mutual collaborator(s) (developer_14, developer_51, developer_31)."
+    },
+    {
+      "rank": 7,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_2",
+      "score": 2.0,
+      "explanation": "Shares 2 mutual collaborator(s) (developer_1, developer_31)."
+    },
+    {
+      "rank": 8,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_7",
+      "score": 2.0,
+      "explanation": "Shares 2 mutual collaborator(s) (developer_11, developer_14)."
+    },
+    {
+      "rank": 9,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_24",
+      "score": 2.0,
+      "explanation": "Shares 2 mutual collaborator(s) (developer_32, developer_14)."
+    },
+    {
+      "rank": 10,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_39",
+      "score": 2.0,
+      "explanation": "Shares 2 mutual collaborator(s) (developer_1, developer_31)."
+    },
+    {
+      "rank": 11,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_45",
+      "score": 2.0,
+      "explanation": "Shares 2 mutual collaborator(s) (developer_53, developer_51)."
+    },
+    {
+      "rank": 12,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_50",
+      "score": 2.0,
+      "explanation": "Shares 2 mutual collaborator(s) (developer_1, developer_53)."
+    },
+    {
+      "rank": 13,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_3",
+      "score": 1.0,
+      "explanation": "Shares 1 mutual collaborator(s) (developer_1)."
+    },
+    {
+      "rank": 14,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_4",
+      "score": 1.0,
+      "explanation": "Shares 1 mutual collaborator(s) (developer_1)."
+    },
+    {
+      "rank": 15,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_5",
+      "score": 1.0,
+      "explanation": "Shares 1 mutual collaborator(s) (developer_11)."
+    },
+    {
+      "rank": 16,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_6",
+      "score": 1.0,
+      "explanation": "Shares 1 mutual collaborator(s) (developer_14)."
+    },
+    {
+      "rank": 17,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_10",
+      "score": 1.0,
+      "explanation": "Shares 1 mutual collaborator(s) (developer_11)."
+    },
+    {
+      "rank": 18,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_13",
+      "score": 1.0,
+      "explanation": "Shares 1 mutual collaborator(s) (developer_14)."
+    },
+    {
+      "rank": 19,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_21",
+      "score": 1.0,
+      "explanation": "Shares 1 mutual collaborator(s) (developer_11)."
+    },
+    {
+      "rank": 20,
+      "algorithm": "common_neighbors",
+      "seed_user": "developer_0",
+      "candidate": "developer_26",
+      "score": 1.0,
+      "explanation": "Shares 1 mutual collaborator(s) (developer_53)."
+    }
+  ],
+  "jaccard_coefficient": [
+    {
+      "rank": 1,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_37",
+      "score": 0.25,
+      "explanation": "Relative neighborhood overlap of 0.250 (4 shared out of 16 total distinct neighbors)."
+    },
+    {
+      "rank": 2,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_36",
+      "score": 0.214286,
+      "explanation": "Relative neighborhood overlap of 0.214 (3 shared out of 14 total distinct neighbors)."
+    },
+    {
+      "rank": 3,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_55",
+      "score": 0.2,
+      "explanation": "Relative neighborhood overlap of 0.200 (3 shared out of 15 total distinct neighbors)."
+    },
+    {
+      "rank": 4,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_18",
+      "score": 0.176471,
+      "explanation": "Relative neighborhood overlap of 0.176 (3 shared out of 17 total distinct neighbors)."
+    },
+    {
+      "rank": 5,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_9",
+      "score": 0.166667,
+      "explanation": "Relative neighborhood overlap of 0.167 (3 shared out of 18 total distinct neighbors)."
+    },
+    {
+      "rank": 6,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_24",
+      "score": 0.166667,
+      "explanation": "Relative neighborhood overlap of 0.167 (2 shared out of 12 total distinct neighbors)."
+    },
+    {
+      "rank": 7,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_43",
+      "score": 0.166667,
+      "explanation": "Relative neighborhood overlap of 0.167 (3 shared out of 18 total distinct neighbors)."
+    },
+    {
+      "rank": 8,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_45",
+      "score": 0.166667,
+      "explanation": "Relative neighborhood overlap of 0.167 (2 shared out of 12 total distinct neighbors)."
+    },
+    {
+      "rank": 9,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_2",
+      "score": 0.153846,
+      "explanation": "Relative neighborhood overlap of 0.154 (2 shared out of 13 total distinct neighbors)."
+    },
+    {
+      "rank": 10,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_39",
+      "score": 0.153846,
+      "explanation": "Relative neighborhood overlap of 0.154 (2 shared out of 13 total distinct neighbors)."
+    },
+    {
+      "rank": 11,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_7",
+      "score": 0.125,
+      "explanation": "Relative neighborhood overlap of 0.125 (2 shared out of 16 total distinct neighbors)."
+    },
+    {
+      "rank": 12,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_50",
+      "score": 0.125,
+      "explanation": "Relative neighborhood overlap of 0.125 (2 shared out of 16 total distinct neighbors)."
+    },
+    {
+      "rank": 13,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_26",
+      "score": 0.1,
+      "explanation": "Relative neighborhood overlap of 0.100 (1 shared out of 10 total distinct neighbors)."
+    },
+    {
+      "rank": 14,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_4",
+      "score": 0.090909,
+      "explanation": "Relative neighborhood overlap of 0.091 (1 shared out of 11 total distinct neighbors)."
+    },
+    {
+      "rank": 15,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_56",
+      "score": 0.090909,
+      "explanation": "Relative neighborhood overlap of 0.091 (1 shared out of 11 total distinct neighbors)."
+    },
+    {
+      "rank": 16,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_3",
+      "score": 0.076923,
+      "explanation": "Relative neighborhood overlap of 0.077 (1 shared out of 13 total distinct neighbors)."
+    },
+    {
+      "rank": 17,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_13",
+      "score": 0.076923,
+      "explanation": "Relative neighborhood overlap of 0.077 (1 shared out of 13 total distinct neighbors)."
+    },
+    {
+      "rank": 18,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_44",
+      "score": 0.076923,
+      "explanation": "Relative neighborhood overlap of 0.077 (1 shared out of 13 total distinct neighbors)."
+    },
+    {
+      "rank": 19,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_6",
+      "score": 0.071429,
+      "explanation": "Relative neighborhood overlap of 0.071 (1 shared out of 14 total distinct neighbors)."
+    },
+    {
+      "rank": 20,
+      "algorithm": "jaccard_coefficient",
+      "seed_user": "developer_0",
+      "candidate": "developer_21",
+      "score": 0.071429,
+      "explanation": "Relative neighborhood overlap of 0.071 (1 shared out of 14 total distinct neighbors)."
+    }
+  ],
+  "adamic_adar": [
+    {
+      "rank": 1,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_37",
+      "score": 1.770083,
+      "explanation": "Connects via 4 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 2,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_18",
+      "score": 1.619278,
+      "explanation": "Connects via 3 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 3,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_55",
+      "score": 1.596478,
+      "explanation": "Connects via 3 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 4,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_9",
+      "score": 1.5935,
+      "explanation": "Connects via 3 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 5,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_43",
+      "score": 1.456041,
+      "explanation": "Connects via 3 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 6,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_36",
+      "score": 1.378829,
+      "explanation": "Connects via 3 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 7,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_2",
+      "score": 1.039009,
+      "explanation": "Connects via 2 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 8,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_39",
+      "score": 1.039009,
+      "explanation": "Connects via 2 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 9,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_45",
+      "score": 1.038367,
+      "explanation": "Connects via 2 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 10,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_24",
+      "score": 0.897931,
+      "explanation": "Connects via 2 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 11,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_50",
+      "score": 0.897931,
+      "explanation": "Connects via 2 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 12,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_7",
+      "score": 0.872152,
+      "explanation": "Connects via 2 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 13,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_46",
+      "score": 0.621335,
+      "explanation": "Connects via 1 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 14,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_49",
+      "score": 0.621335,
+      "explanation": "Connects via 1 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 15,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_56",
+      "score": 0.558111,
+      "explanation": "Connects via 1 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 16,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_3",
+      "score": 0.480898,
+      "explanation": "Connects via 1 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 17,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_4",
+      "score": 0.480898,
+      "explanation": "Connects via 1 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 18,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_29",
+      "score": 0.480898,
+      "explanation": "Connects via 1 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 19,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_34",
+      "score": 0.480898,
+      "explanation": "Connects via 1 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    },
+    {
+      "rank": 20,
+      "algorithm": "adamic_adar",
+      "seed_user": "developer_0",
+      "candidate": "developer_40",
+      "score": 0.480898,
+      "explanation": "Connects via 1 shared collaborator(s) weighted by inverse log degree (prioritizes niche, specific co-collaborators)."
+    }
+  ],
+  "preferential_attachment": [
+    {
+      "rank": 1,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_9",
+      "score": 104.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 13 = 104)."
+    },
+    {
+      "rank": 2,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_43",
+      "score": 104.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 13 = 104)."
+    },
+    {
+      "rank": 3,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_18",
+      "score": 96.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 12 = 96)."
+    },
+    {
+      "rank": 4,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_34",
+      "score": 96.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 12 = 96)."
+    },
+    {
+      "rank": 5,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_37",
+      "score": 96.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 12 = 96)."
+    },
+    {
+      "rank": 6,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_49",
+      "score": 96.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 12 = 96)."
+    },
+    {
+      "rank": 7,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_7",
+      "score": 80.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 10 = 80)."
+    },
+    {
+      "rank": 8,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_15",
+      "score": 80.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 10 = 80)."
+    },
+    {
+      "rank": 9,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_50",
+      "score": 80.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 10 = 80)."
+    },
+    {
+      "rank": 10,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_55",
+      "score": 80.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 10 = 80)."
+    },
+    {
+      "rank": 11,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_10",
+      "score": 72.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 9 = 72)."
+    },
+    {
+      "rank": 12,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_23",
+      "score": 72.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 9 = 72)."
+    },
+    {
+      "rank": 13,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_29",
+      "score": 72.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 9 = 72)."
+    },
+    {
+      "rank": 14,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_33",
+      "score": 72.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 9 = 72)."
+    },
+    {
+      "rank": 15,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_36",
+      "score": 72.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 9 = 72)."
+    },
+    {
+      "rank": 16,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_38",
+      "score": 72.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 9 = 72)."
+    },
+    {
+      "rank": 17,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_41",
+      "score": 72.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 9 = 72)."
+    },
+    {
+      "rank": 18,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_46",
+      "score": 72.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 9 = 72)."
+    },
+    {
+      "rank": 19,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_5",
+      "score": 64.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 8 = 64)."
+    },
+    {
+      "rank": 20,
+      "algorithm": "preferential_attachment",
+      "seed_user": "developer_0",
+      "candidate": "developer_27",
+      "score": 64.0,
+      "explanation": "High network visibility and activity: product of degrees (8 \u00d7 8 = 64)."
+    }
+  ]
+}

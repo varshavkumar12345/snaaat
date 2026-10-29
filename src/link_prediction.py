@@ -1,47 +1,37 @@
 """
 src/link_prediction.py
 -----------------------
-Four graph-theoretic link-prediction algorithms.
+Phase 6: Topological Link-Prediction Algorithms and Recommendation Explainer.
 
-All algorithms operate on a NetworkX graph (the *training* graph) and return
-scored candidate pairs, suitable for evaluation against held-out test edges.
+Algorithms:
+  1. Common Neighbors (CN)
+  2. Jaccard Coefficient (JC)
+  3. Adamic-Adar Index (AA)
+  4. Preferential Attachment (PA)
 
-Algorithms
-~~~~~~~~~~
-1. **Common Neighbors** — |N(u) ∩ N(v)|
-2. **Jaccard Coefficient** — |N(u) ∩ N(v)| / |N(u) ∪ N(v)|
-3. **Adamic-Adar Index** — Σ_{w ∈ N(u)∩N(v)} 1 / log(|N(w)|)
-4. **Preferential Attachment** — |N(u)| × |N(v)|
-
-Usage
-~~~~~
-    from src import load_config
-    from src.link_prediction import LinkPredictor
-
-    cfg = load_config()
-    predictor = LinkPredictor(cfg)
-    scores = predictor.score_all(G_train, test_pos, test_neg)
-    # scores is a dict: algorithm_name → {(u,v): score, …}
+Features:
+  - Generates structural explanations for each recommended pair.
+  - Excludes existing neighbors, self-loops, and bots.
+  - Scores are treated as ranking heuristics, not calibrated probabilities.
 """
 
 from __future__ import annotations
 
 import logging
 import math
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 
 logger = logging.getLogger(__name__)
 
-# Type aliases
 Edge = Tuple[str, str]
 ScoreMap = Dict[Edge, float]
 AllScores = Dict[str, ScoreMap]
 
 
 class LinkPredictor:
-    """Compute link-prediction scores for a set of candidate edges."""
+    """Compute link prediction scores and generate explainable recommendations."""
 
     def __init__(self, config: dict) -> None:
         self._config = config
@@ -56,44 +46,16 @@ class LinkPredictor:
             ],
         )
 
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
-
-    def score_all(
+    def score_candidates(
         self,
         G: nx.Graph,
-        test_pos: List[Edge],
-        test_neg: List[Edge],
+        candidate_pairs: List[Edge],
     ) -> AllScores:
-        """Score all candidate edges with every configured algorithm.
-
-        Parameters
-        ----------
-        G:
-            Training graph (test edges removed).
-        test_pos:
-            Held-out positive (existing) edge pairs.
-        test_neg:
-            Sampled negative (non-existing) edge pairs.
-
-        Returns
-        -------
-        dict
-            ``{algorithm_name: {(u, v): score}}`` for every algorithm.
-        """
-        candidates: List[Edge] = test_pos + test_neg
+        """Score candidate pairs with all 4 algorithms on training graph G."""
         all_scores: AllScores = {}
-
         for algo in self._algorithms:
-            logger.info("Running link-prediction algorithm: %s …", algo)
-            try:
-                scores = self._dispatch(algo, G, candidates)
-                all_scores[algo] = scores
-                logger.info("  → %d pairs scored.", len(scores))
-            except Exception as exc:  # noqa: BLE001
-                logger.error("Algorithm %s failed: %s", algo, exc)
-
+            scores = self._dispatch(algo, G, candidate_pairs)
+            all_scores[algo] = scores
         return all_scores
 
     def recommend(
@@ -101,56 +63,87 @@ class LinkPredictor:
         G: nx.Graph,
         seed_user: str,
         top_k: int = 20,
-    ) -> Dict[str, List[Tuple[Edge, float]]]:
-        """Generate Top-K collaboration recommendations for *seed_user*.
-
-        Only considers non-neighbours of *seed_user* that are present in the
-        graph (true link-prediction candidates).
-
-        Parameters
-        ----------
-        G:
-            Collaboration graph.
-        seed_user:
-            The user for whom to generate recommendations.
-        top_k:
-            Number of recommendations to return per algorithm.
-
-        Returns
-        -------
-        dict
-            ``{algorithm_name: [(edge, score), …]}`` sorted descending.
+        exclude_users: Optional[Set[str]] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
+        Generate ranked recommendations for seed_user excluding existing neighbors,
+        self-loops, and excluded users/bots.
+        """
+        seed_user = seed_user.lower().strip()
         if seed_user not in G:
-            logger.warning("Seed user '%s' not in graph.", seed_user)
+            logger.warning("Seed user '%s' not present in graph.", seed_user)
             return {}
 
-        # Candidate pairs: seed ↔ non-neighbour nodes
-        neighbors = set(G.neighbors(seed_user)) | {seed_user}
-        candidates: List[Edge] = [
-            (seed_user, v) for v in G.nodes() if v not in neighbors
-        ]
+        existing_neighbors = set(G.neighbors(seed_user)) | {seed_user}
+        if exclude_users:
+            existing_neighbors |= exclude_users
 
-        if not candidates:
-            logger.warning("No candidate pairs found for '%s'.", seed_user)
+        # Candidate pool: nodes in G not already connected to seed_user
+        candidate_nodes = [n for n in G.nodes() if n not in existing_neighbors]
+        if not candidate_nodes:
+            logger.warning("No candidate non-neighbors available for '%s'.", seed_user)
             return {}
 
-        results: Dict[str, List[Tuple[Edge, float]]] = {}
-        for algo in self._algorithms:
-            scores = self._dispatch(algo, G, candidates)
-            ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-            results[algo] = ranked[:top_k]
+        candidate_pairs = [(seed_user, target) for target in candidate_nodes]
+        all_scores = self.score_candidates(G, candidate_pairs)
 
-        return results
+        recommendations: Dict[str, List[Dict[str, Any]]] = {}
 
-    # ------------------------------------------------------------------
-    # Algorithm dispatch
-    # ------------------------------------------------------------------
+        for algo, score_map in all_scores.items():
+            sorted_pairs = sorted(score_map.items(), key=lambda x: x[1], reverse=True)
+            algo_recs = []
+            for rank, ((u, v), score) in enumerate(sorted_pairs[:top_k], start=1):
+                target = v if u == seed_user else u
+                explanation = self._explain_prediction(G, seed_user, target, algo, score)
+                algo_recs.append({
+                    "rank": rank,
+                    "algorithm": algo,
+                    "seed_user": seed_user,
+                    "candidate": target,
+                    "score": round(float(score), 6),
+                    "explanation": explanation,
+                })
+            recommendations[algo] = algo_recs
 
-    def _dispatch(
-        self, algorithm: str, G: nx.Graph, candidates: List[Edge]
-    ) -> ScoreMap:
-        """Route to the correct scoring function."""
+        return recommendations
+
+    def _explain_prediction(
+        self,
+        G: nx.Graph,
+        u: str,
+        v: str,
+        algo: str,
+        score: float,
+    ) -> str:
+        """Produce graph-theoretic explanation for a recommendation."""
+        cn = list(nx.common_neighbors(G, u, v)) if (u in G and v in G) else []
+        deg_u = G.degree(u) if u in G else 0
+        deg_v = G.degree(v) if v in G else 0
+
+        if algo == "common_neighbors":
+            return (
+                f"Shares {len(cn)} mutual collaborator(s) "
+                f"({', '.join(cn[:3]) + ('...' if len(cn) > 3 else '') if cn else 'none'})."
+            )
+        elif algo == "jaccard_coefficient":
+            union_size = len(set(G.neighbors(u)) | set(G.neighbors(v))) if (u in G and v in G) else 0
+            return (
+                f"Relative neighborhood overlap of {score:.3f} "
+                f"({len(cn)} shared out of {union_size} total distinct neighbors)."
+            )
+        elif algo == "adamic_adar":
+            return (
+                f"Connects via {len(cn)} shared collaborator(s) weighted by inverse log degree "
+                f"(prioritizes niche, specific co-collaborators)."
+            )
+        elif algo == "preferential_attachment":
+            return (
+                f"High network visibility and activity: product of degrees "
+                f"({deg_u} × {deg_v} = {deg_u * deg_v})."
+            )
+        return "Topological affinity in collaboration graph."
+
+    def _dispatch(self, algorithm: str, G: nx.Graph, candidates: List[Edge]) -> ScoreMap:
         dispatch = {
             "common_neighbors": self._common_neighbors,
             "jaccard_coefficient": self._jaccard_coefficient,
@@ -158,36 +151,26 @@ class LinkPredictor:
             "preferential_attachment": self._preferential_attachment,
         }
         fn = dispatch.get(algorithm)
-        if fn is None:
+        if not fn:
             raise ValueError(f"Unknown algorithm: '{algorithm}'")
         return fn(G, candidates)
 
-    # ------------------------------------------------------------------
-    # Algorithm implementations
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _common_neighbors(G: nx.Graph, candidates: List[Edge]) -> ScoreMap:
-        """|N(u) ∩ N(v)| for each candidate pair."""
         scores: ScoreMap = {}
         for u, v in candidates:
             if u in G and v in G:
-                cn = len(list(nx.common_neighbors(G, u, v)))
-                scores[(u, v)] = float(cn)
+                scores[(u, v)] = float(len(list(nx.common_neighbors(G, u, v))))
             else:
                 scores[(u, v)] = 0.0
         return scores
 
     @staticmethod
     def _jaccard_coefficient(G: nx.Graph, candidates: List[Edge]) -> ScoreMap:
-        """Jaccard coefficient for each candidate pair.
-
-        |N(u) ∩ N(v)| / |N(u) ∪ N(v)|
-        """
-        valid_candidates = [(u, v) for u, v in candidates if u in G and v in G]
+        valid = [(u, v) for u, v in candidates if u in G and v in G]
         scores: ScoreMap = {
             (u, v): float(p)
-            for u, v, p in nx.jaccard_coefficient(G, valid_candidates)
+            for u, v, p in nx.jaccard_coefficient(G, valid)
         }
         for pair in candidates:
             if pair not in scores:
@@ -196,14 +179,10 @@ class LinkPredictor:
 
     @staticmethod
     def _adamic_adar(G: nx.Graph, candidates: List[Edge]) -> ScoreMap:
-        """Adamic-Adar index for each candidate pair.
-
-        Σ_{w ∈ N(u)∩N(v)} 1 / log(|N(w)|)
-        """
-        valid_candidates = [(u, v) for u, v in candidates if u in G and v in G]
+        valid = [(u, v) for u, v in candidates if u in G and v in G]
         scores: ScoreMap = {
             (u, v): float(p)
-            for u, v, p in nx.adamic_adar_index(G, valid_candidates)
+            for u, v, p in nx.adamic_adar_index(G, valid)
         }
         for pair in candidates:
             if pair not in scores:
@@ -211,17 +190,13 @@ class LinkPredictor:
         return scores
 
     @staticmethod
-    def _preferential_attachment(
-        G: nx.Graph, candidates: List[Edge]
-    ) -> ScoreMap:
-        """Preferential attachment score: |N(u)| × |N(v)|."""
-        valid_candidates = [(u, v) for u, v in candidates if u in G and v in G]
+    def _preferential_attachment(G: nx.Graph, candidates: List[Edge]) -> ScoreMap:
+        valid = [(u, v) for u, v in candidates if u in G and v in G]
         scores: ScoreMap = {
             (u, v): float(p)
-            for u, v, p in nx.preferential_attachment(G, valid_candidates)
+            for u, v, p in nx.preferential_attachment(G, valid)
         }
         for pair in candidates:
             if pair not in scores:
                 scores[pair] = 0.0
         return scores
-

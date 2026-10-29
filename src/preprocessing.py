@@ -183,6 +183,38 @@ class Preprocessor:
             })
         return pd.DataFrame(rows).sort_values("weight", ascending=False)
 
+    def _sanitize_for_graphml(self, G: nx.Graph) -> nx.Graph:
+        """Create a copy of G with all attributes converted to GraphML-compatible primitives."""
+        G_out = nx.Graph()
+        # Copy graph-level attributes (exclude lists/dicts)
+        for k, v in G.graph.items():
+            if isinstance(v, (str, int, float, bool)):
+                G_out.graph[k] = v
+
+        for n, data in G.nodes(data=True):
+            clean_data = {}
+            for k, v in data.items():
+                if isinstance(v, (list, set, tuple)):
+                    clean_data[k] = ", ".join(map(str, v))
+                elif isinstance(v, (str, int, float, bool)):
+                    clean_data[k] = v
+                else:
+                    clean_data[k] = str(v)
+            G_out.add_node(n, **clean_data)
+
+        for u, v, data in G.edges(data=True):
+            clean_data = {}
+            for k, val in data.items():
+                if isinstance(val, (list, set, tuple)):
+                    clean_data[k] = ", ".join(map(str, val))
+                elif isinstance(val, (str, int, float, bool)):
+                    clean_data[k] = val
+                else:
+                    clean_data[k] = str(val)
+            G_out.add_edge(u, v, **clean_data)
+
+        return G_out
+
     def _save_artifacts(
         self,
         G_full: nx.Graph,
@@ -202,9 +234,11 @@ class Preprocessor:
         tables["test_pos"].to_csv(self._splits_dir / "test_pos.csv", index=False)
         tables["test_neg"].to_csv(self._splits_dir / "test_neg.csv", index=False)
 
-        # Save GraphML files
-        nx.write_graphml(G_full, str(self._processed_dir / "network_full.graphml"))
-        nx.write_graphml(G_train, str(self._splits_dir / "network_train.graphml"))
+        # Save GraphML files safely
+        G_full_s = self._sanitize_for_graphml(G_full)
+        G_train_s = self._sanitize_for_graphml(G_train)
+        nx.write_graphml(G_full_s, str(self._processed_dir / "network_full.graphml"))
+        nx.write_graphml(G_train_s, str(self._splits_dir / "network_train.graphml"))
 
         # Save pickle dictionary
         splits_bundle = {

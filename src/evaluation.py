@@ -1,30 +1,21 @@
 """
 src/evaluation.py
 ------------------
-Evaluate link-prediction algorithm performance.
+Phase 6: Comprehensive Link Prediction Evaluator.
 
-Metrics computed
-~~~~~~~~~~~~~~~~
-* AUC-ROC  — area under the receiver operating characteristic curve
-* Average Precision (AUC-PR)
-* Precision @ threshold = 0.5 (after min-max normalisation)
-* Recall @ threshold = 0.5
-* F1 Score @ threshold = 0.5
-
-Usage
-~~~~~
-    from src import load_config
-    from src.evaluation import Evaluator
-
-    cfg = load_config()
-    evaluator = Evaluator(cfg)
-    results_df = evaluator.evaluate(all_scores, test_pos, test_neg)
+Metrics:
+  - ROC-AUC
+  - Average Precision (PR-AUC)
+  - Precision@K (K=10, K=20)
+  - Recall@K (K=10, K=20)
+  - F1-Score (at 0.5 threshold)
+  - Handles edge-cases, undefined metrics, and sparse partitions gracefully.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -44,14 +35,12 @@ AllScores = Dict[str, ScoreMap]
 
 
 class Evaluator:
-    """Compute evaluation metrics for all link-prediction algorithms."""
+    """Evaluates link-prediction algorithms across ranking and classification metrics."""
 
     def __init__(self, config: dict) -> None:
         self._config = config
-
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
+        rec_cfg = config.get("recommendations", {})
+        self._top_k_values: List[int] = rec_cfg.get("top_k_values", [10, 20])
 
     def evaluate(
         self,
@@ -59,105 +48,93 @@ class Evaluator:
         test_pos: List[Edge],
         test_neg: List[Edge],
     ) -> pd.DataFrame:
-        """Evaluate all algorithms and return a comparison DataFrame.
+        """
+        Evaluate all algorithms on the same test candidate set.
 
         Parameters
         ----------
         all_scores:
-            Output of ``LinkPredictor.score_all()``.
+            Mapping of algorithm -> {(u, v): score}.
         test_pos:
-            Held-out positive edges (label = 1).
+            Positive held-out edges (y_true = 1).
         test_neg:
-            Sampled negative edges (label = 0).
+            Negative sample non-edges (y_true = 0).
 
         Returns
         -------
         pd.DataFrame
-            One row per algorithm with columns:
-            algorithm, auc_roc, avg_precision, precision, recall, f1,
-            n_test_pos, n_test_neg.
+            Comparison table indexed by algorithm name.
         """
         rows = []
+        test_pos_set = {tuple(sorted(p)) for p in test_pos}
+        test_neg_set = {tuple(sorted(p)) for p in test_neg}
+        all_test_pairs = list(test_pos_set) + list(test_neg_set)
+
+        y_true = np.array([1] * len(test_pos_set) + [0] * len(test_neg_set))
+
         for algo, score_map in all_scores.items():
-            metrics = self._compute_metrics(score_map, test_pos, test_neg)
+            y_scores = []
+            for u, v in all_test_pairs:
+                pair = tuple(sorted((u, v)))
+                score = score_map.get(pair, score_map.get((v, u), 0.0))
+                y_scores.append(score)
+
+            y_scores = np.array(y_scores, dtype=float)
+            metrics = self._compute_metrics_for_algo(y_true, y_scores, all_test_pairs, test_pos_set)
             metrics["algorithm"] = algo
             rows.append(metrics)
-            logger.info(
-                "%-30s  AUC-ROC=%.4f  AP=%.4f  F1=%.4f",
-                algo,
-                metrics["auc_roc"],
-                metrics["avg_precision"],
-                metrics["f1"],
-            )
 
         df = pd.DataFrame(rows).set_index("algorithm")
         return df
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _compute_metrics(
+    def _compute_metrics_for_algo(
         self,
-        score_map: ScoreMap,
-        test_pos: List[Edge],
-        test_neg: List[Edge],
-    ) -> dict:
-        """Compute all metrics for a single algorithm's score map."""
-        y_true: List[int] = []
-        y_score: List[float] = []
-
-        for edge in test_pos:
-            score = score_map.get(edge, score_map.get((edge[1], edge[0]), 0.0))
-            y_true.append(1)
-            y_score.append(score)
-
-        for edge in test_neg:
-            score = score_map.get(edge, score_map.get((edge[1], edge[0]), 0.0))
-            y_true.append(0)
-            y_score.append(score)
-
-        y_true_arr = np.array(y_true)
-        y_score_arr = np.array(y_score, dtype=float)
-
-        # Min-max normalise scores to [0, 1] for threshold-based metrics
-        score_min, score_max = y_score_arr.min(), y_score_arr.max()
-        if score_max > score_min:
-            y_score_norm = (y_score_arr - score_min) / (score_max - score_min)
-        else:
-            y_score_norm = y_score_arr
-
-        y_pred = (y_score_norm >= 0.5).astype(int)
-
-        # Guard against degenerate cases
-        n_pos = int(y_true_arr.sum())
-        n_neg = len(y_true_arr) - n_pos
-
-        if n_pos == 0 or n_neg == 0:
-            logger.warning("Degenerate test set (all same label). Skipping metrics.")
-            return {
-                "auc_roc": float("nan"),
-                "avg_precision": float("nan"),
-                "precision": float("nan"),
-                "recall": float("nan"),
-                "f1": float("nan"),
-                "n_test_pos": n_pos,
-                "n_test_neg": n_neg,
-            }
-
-        auc = roc_auc_score(y_true_arr, y_score_arr)
-        ap = average_precision_score(y_true_arr, y_score_arr)
-        prec = precision_score(y_true_arr, y_pred, zero_division=0)
-        rec = recall_score(y_true_arr, y_pred, zero_division=0)
-        f1 = f1_score(y_true_arr, y_pred, zero_division=0)
-
-        return {
-            "auc_roc": round(float(auc), 6),
-            "avg_precision": round(float(ap), 6),
-            "precision": round(float(prec), 6),
-            "recall": round(float(rec), 6),
-            "f1": round(float(f1), 6),
-            "n_test_pos": n_pos,
-            "n_test_neg": n_neg,
+        y_true: np.ndarray,
+        y_scores: np.ndarray,
+        test_pairs: List[Edge],
+        test_pos_set: set[Edge],
+    ) -> Dict[str, Any]:
+        """Compute AUC, F1, and Precision/Recall@K."""
+        results: Dict[str, Any] = {
+            "n_test_pos": int(sum(y_true == 1)),
+            "n_test_neg": int(sum(y_true == 0)),
         }
 
+        # 1. ROC-AUC and PR-AUC
+        if len(np.unique(y_true)) > 1 and len(np.unique(y_scores)) > 1:
+            try:
+                results["roc_auc"] = round(float(roc_auc_score(y_true, y_scores)), 4)
+                results["pr_auc"] = round(float(average_precision_score(y_true, y_scores)), 4)
+            except Exception:
+                results["roc_auc"] = np.nan
+                results["pr_auc"] = np.nan
+        else:
+            results["roc_auc"] = 0.5
+            results["pr_auc"] = float(round(sum(y_true == 1) / len(y_true), 4)) if len(y_true) > 0 else np.nan
+
+        # 2. Precision & Recall @ K
+        # Sort candidates descending by score
+        order = np.argsort(-y_scores)
+        total_positives = len(test_pos_set)
+
+        for k in self._top_k_values:
+            actual_k = min(k, len(y_true))
+            top_indices = order[:actual_k]
+            hits = sum(y_true[top_indices] == 1)
+
+            prec_k = hits / actual_k if actual_k > 0 else 0.0
+            rec_k = hits / total_positives if total_positives > 0 else 0.0
+
+            results[f"precision@{k}"] = round(float(prec_k), 4)
+            results[f"recall@{k}"] = round(float(rec_k), 4)
+
+        # 3. F1-score with min-max normalized threshold
+        score_min, score_max = y_scores.min(), y_scores.max()
+        if score_max > score_min:
+            norm_scores = (y_scores - score_min) / (score_max - score_min)
+            y_pred = (norm_scores >= 0.5).astype(int)
+        else:
+            y_pred = np.zeros_like(y_true)
+
+        results["f1_score"] = round(float(f1_score(y_true, y_pred, zero_division=0)), 4)
+        return results
